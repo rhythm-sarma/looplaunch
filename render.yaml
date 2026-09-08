@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: crawl4ai-service
+    runtime: docker
+    dockerfilePath: Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 11235
