@@ -8,7 +8,6 @@ import { HowItWorksSection } from "./HowItWorksSection";
 import { DeepResearchSection } from "./DeepResearchSection";
 import { StrategicIntelligenceSection } from "./StrategicIntelligenceSection";
 import { StrategyOutputSection } from "./StrategyOutputSection";
-import { RoadmapSection } from "./RoadmapSection";
 import { FinalCtaSection } from "./FinalCtaSection";
 import { LandingFooter } from "./LandingFooter";
 
@@ -53,10 +52,7 @@ export function LandingPage() {
       {/* 8. Strategy Output Section */}
       <StrategyOutputSection />
 
-      {/* 9. 30 / 60 / 90 Roadmap */}
-      <RoadmapSection />
-
-      {/* 10. Final CTA */}
+      {/* 9. Final CTA */}
       <FinalCtaSection
         onGetStarted={handleStartOnboarding}
       />

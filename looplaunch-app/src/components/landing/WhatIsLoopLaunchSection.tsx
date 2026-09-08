@@ -24,7 +24,7 @@ const STRATEGY_STEPS = [
   {
     num: "04",
     title: "Build",
-    description: "A focused strategy and execution roadmap.",
+    description: "A focused strategy and actionable intelligence.",
   },
 ];
 

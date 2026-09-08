@@ -46,7 +46,7 @@ export default function ReadyPage() {
             </span>
           </div>
           <p className="text-xs text-text-tertiary leading-relaxed">
-            When the analysis backend is connected, your strategic diagnosis, competitor research, and 30/60/90 plan will appear here.
+            When the analysis backend is connected, your strategic diagnosis, competitor research, and actionable recommendations will appear here.
           </p>
         </div>
       </div>

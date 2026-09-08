@@ -38,9 +38,9 @@ const STEPS_DATA = [
   },
   {
     num: "06",
-    title: "Create your roadmap",
+    title: "Ask strategic questions",
     description:
-      "Translate strategic decisions into sequenced execution priorities across 30, 60, and 90 days.",
+      "Interrogate your intelligence, stress-test growth decisions, and get tailored strategic answers.",
   },
 ];
 

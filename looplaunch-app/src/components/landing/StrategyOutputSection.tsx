@@ -66,15 +66,15 @@ const STRATEGY_DELIVERABLES = [
     ],
   },
   {
-    id: "roadmap",
-    label: "Roadmap",
-    title: "Action Roadmap",
+    id: "qa",
+    label: "Strategic Q&A",
+    title: "Interactive Strategy Advisory",
     summary:
-      "Sequenced tactical priorities from day 1 through day 90.",
+      "Ask specific marketing questions and receive synthesized recommendations grounded in your company, competitor, and market data.",
     points: [
-      "Days 1–30: Core messaging alignment and initial channel tests",
-      "Days 31–60: Scaling winning distribution vectors and content assets",
-      "Days 61–90: Expansion into adjacent audience segments",
+      "Interrogate competitor moats and find exploitable positioning weaknesses",
+      "Stress-test pricing, messaging angles, and channel distribution",
+      "Get concrete next experiments, hypotheses, and proof points",
     ],
   },
 ];
