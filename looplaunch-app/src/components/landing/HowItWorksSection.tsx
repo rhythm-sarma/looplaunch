@@ -80,8 +80,8 @@ export function HowItWorksSection() {
               separator="|"
               manualMode={false}
               blurAmount={4}
-              borderColor="#ffffff"
-              glowColor="rgba(255, 255, 255, 0.5)"
+              borderColor="#8108ea"
+              glowColor="rgba(129, 8, 234, 0.7)"
               animationDuration={0.6}
               pauseBetweenAnimations={1.2}
             />
@@ -100,13 +100,13 @@ export function HowItWorksSection() {
           {STEPS_DATA.map((step) => (
             <StaggerItem key={step.num}>
               <SpotlightCard
-                className="h-full p-6 sm:p-7 bg-[#0b0b0b] hover:bg-[#0f0f0f] transition-colors"
+                className="h-full p-6 sm:p-7 bg-bg-surface hover:bg-bg-elevated border border-border-subtle hover:border-[#8108ea]/50 transition-colors"
                 radius={340}
-                surfaceGlow="rgba(255, 255, 255, 0.05)"
-                borderGlow="rgba(255, 255, 255, 0.25)"
+                surfaceGlow="rgba(0, 54, 125, 0.22)"
+                borderGlow="rgba(129, 8, 234, 0.55)"
               >
                 {/* Step number */}
-                <div className="text-xs text-text-tertiary mb-4 font-mono">
+                <div className="text-xs text-[#8108ea] font-semibold mb-4 font-mono">
                   {step.num}
                 </div>
 

@@ -2,38 +2,52 @@
  * Onboarding data model.
  * This object is collected during onboarding and will eventually
  * be sent to the backend analysis pipeline.
+ *
+ * Updated to match founder's spec (Sep 2026).
  */
 export interface OnboardingData {
+  companyName: string;
+  nameAndRole: string;
+  whatTheySell: string;
   website: string;
-  companyDescription: string;
-  targetAudience: string;
   competitors: string;
-  primaryGoal: string;
-  currentMarketing: string;
-  constraints: string;
+  painPoint: string;
+  whyTheyreHere: string[];  // multi-select options
 }
 
 export const EMPTY_ONBOARDING: OnboardingData = {
+  companyName: "",
+  nameAndRole: "",
+  whatTheySell: "",
   website: "",
-  companyDescription: "",
-  targetAudience: "",
   competitors: "",
-  primaryGoal: "",
-  currentMarketing: "",
-  constraints: "",
+  painPoint: "",
+  whyTheyreHere: [],
 };
+
+/**
+ * "Why they're here" options — these quietly show everything Loopy can do.
+ */
+export const WHY_HERE_OPTIONS = [
+  "Test if my marketing is even working",
+  "Find where I'm burning money",
+  "Know what to do this month",
+  "Find an angle my competitors are missing",
+  "Get content ideas that fit my plan",
+  "Get a second opinion before I spend or hire more",
+];
 
 /**
  * Step definitions for the onboarding flow.
  */
 export type StepKey =
+  | "companyName"
+  | "nameAndRole"
+  | "whatTheySell"
   | "website"
-  | "company"
-  | "audience"
   | "competitors"
-  | "goal"
-  | "marketing"
-  | "constraints"
+  | "painPoint"
+  | "whyTheyreHere"
   | "review";
 
 export interface StepConfig {
@@ -43,91 +57,84 @@ export interface StepConfig {
   heading: string;
   subtext: string;
   placeholder?: string;
-  inputType: "text" | "textarea";
+  inputType: "text" | "textarea" | "multiselect";
   optional?: boolean;
   skipLabel?: string;
 }
 
 export const STEPS: StepConfig[] = [
   {
-    key: "website",
+    key: "companyName",
     number: 1,
-    field: "website",
-    heading: "What's your website?",
+    field: "companyName",
+    heading: "What's your company called?",
     subtext:
-      "Paste your company website so Loop Launch can start understanding your business.",
-    placeholder: "https://yourwebsite.com",
+      "Let's start with the basics.",
+    placeholder: "e.g. Acme Corp",
     inputType: "text",
   },
   {
-    key: "company",
+    key: "nameAndRole",
     number: 2,
-    field: "companyDescription",
-    heading: "What does your company do?",
+    field: "nameAndRole",
+    heading: "What's your name and role?",
     subtext:
-      "Give us a simple explanation. Don't worry about making it sound perfect.",
+      "So we know who we're talking to.",
+    placeholder: "e.g. Priya Sharma, Co-founder",
+    inputType: "text",
+  },
+  {
+    key: "whatTheySell",
+    number: 3,
+    field: "whatTheySell",
+    heading: "What do you sell, and who buys it?",
+    subtext:
+      "Keep it simple — one or two lines is plenty.",
     placeholder:
-      "Example: We help independent clinics automate patient communication and appointment booking.",
+      "e.g. We sell project management software to small marketing agencies.",
     inputType: "textarea",
   },
   {
-    key: "audience",
-    number: 3,
-    field: "targetAudience",
-    heading: "Who are your target customers?",
-    subtext: "Describe the people or businesses you want to reach.",
-    placeholder:
-      "Example: Small and mid-sized healthcare clinics in India...",
-    inputType: "textarea",
+    key: "website",
+    number: 4,
+    field: "website",
+    heading: "What's your website?",
+    subtext:
+      "Drop your link so Loop Launch can start understanding your business.",
+    placeholder: "yourcompany.com",
+    inputType: "text",
   },
   {
     key: "competitors",
-    number: 4,
+    number: 5,
     field: "competitors",
     heading: "Who are your competitors?",
     subtext:
-      "Tell us who you consider competitors. If you're not sure, that's okay — Loop Launch can research them later.",
-    placeholder: "Example:\nCompetitor A\nCompetitor B\ncompetitor.com",
+      "Name up to 3 companies you think you're competing with. If you're not sure, skip this.",
+    placeholder: "e.g.\nCompetitor A\nCompetitor B\ncompetitor.com",
     inputType: "textarea",
     optional: true,
-    skipLabel: "I don't know yet",
+    skipLabel: "I'm not sure yet",
   },
   {
-    key: "goal",
-    number: 5,
-    field: "primaryGoal",
-    heading: "What are you trying to achieve?",
-    subtext:
-      "What's the main outcome you want from your marketing?",
-    placeholder:
-      "Example: Increase qualified leads, improve positioning, enter a new market...",
-    inputType: "textarea",
-  },
-  {
-    key: "marketing",
+    key: "painPoint",
     number: 6,
-    field: "currentMarketing",
-    heading: "How are you currently getting customers?",
+    field: "painPoint",
+    heading: "What's actually bugging you right now?",
     subtext:
-      "Tell us about your current marketing and acquisition channels.",
+      "A line or two on the marketing problem that brought you here.",
     placeholder:
-      "Example: Mostly referrals and Instagram. We haven't run paid ads yet.",
+      "e.g. We're spending on ads but have no idea if they're working. Leads are inconsistent.",
     inputType: "textarea",
-    optional: true,
-    skipLabel: "I don't know yet",
   },
   {
-    key: "constraints",
+    key: "whyTheyreHere",
     number: 7,
-    field: "constraints",
-    heading: "Anything we should know?",
+    field: "whyTheyreHere",
+    heading: "Why are you here?",
     subtext:
-      "Budget, team size, geography, timeline, limitations, or anything else that could affect the strategy.",
-    placeholder:
-      "Example: Small team, limited marketing budget, launching in the US within 3 months.",
-    inputType: "textarea",
-    optional: true,
-    skipLabel: "Nothing for now",
+      "Pick everything that applies — this helps us focus on what matters to you.",
+    inputType: "multiselect",
   },
   {
     key: "review",

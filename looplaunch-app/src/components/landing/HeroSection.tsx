@@ -1,37 +1,177 @@
 "use client";
 
-import { useState, type KeyboardEvent } from "react";
-import Ferrofluid from "@/components/ui/Ferrofluid";
+import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "motion/react";
+import SideRays from "@/components/ui/SideRays";
 import { Mascot } from "@/components/onboarding/Mascot";
+import { useOnboarding } from "@/lib/onboarding/context";
+import { STEPS, WHY_HERE_OPTIONS } from "@/lib/onboarding/types";
 import { isValidUrl, normalizeUrl } from "@/lib/onboarding/validation";
 
-interface HeroSectionProps {
-  initialUrl?: string;
-  onSubmit: (url: string) => void;
-}
+export function HeroSection() {
+  const router = useRouter();
+  const {
+    data,
+    updateField,
+    currentStepIndex,
+    currentStep,
+    goNext,
+    goPrev,
+    goToStep,
+    canGoPrev,
+  } = useOnboarding();
 
-export function HeroSection({ initialUrl = "", onSubmit }: HeroSectionProps) {
-  const [url, setUrl] = useState(initialUrl);
-  const [error, setError] = useState("");
+  // Intelligence pipeline submission state
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
-  const handleSubmit = () => {
-    const trimmed = url.trim();
-    if (!trimmed) {
-      setError("Please enter your company website.");
-      return;
+  // ─── Website step state (step 4) ───
+  const [domainInput, setDomainInput] = useState(() => {
+    return (data.website || "").replace(/^https?:\/\//i, "").trim();
+  });
+  const [websiteError, setWebsiteError] = useState("");
+  const [websiteFocused, setWebsiteFocused] = useState(false);
+  const [faviconError, setFaviconError] = useState(false);
+
+  const cleanDomain = domainInput
+    .toLowerCase()
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .split("/")[0]
+    .split("?")[0];
+
+  const hasValidDomain =
+    cleanDomain.includes(".") &&
+    cleanDomain.length >= 4 &&
+    !cleanDomain.endsWith(".");
+
+  useEffect(() => {
+    if (data.website) {
+      setDomainInput(data.website.replace(/^https?:\/\//i, "").trim());
     }
-    if (!isValidUrl(trimmed)) {
-      setError("Please enter a valid website URL (e.g. yourcompany.com)");
-      return;
+  }, [data.website]);
+
+  // ─── Generic question state (text/textarea steps) ───
+  const currentField = currentStep.field;
+  const currentVal = currentField
+    ? typeof data[currentField] === "string"
+      ? (data[currentField] as string)
+      : ""
+    : "";
+  const [questionVal, setQuestionVal] = useState(currentVal);
+  const [questionError, setQuestionError] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (currentField && typeof data[currentField] === "string") {
+      setQuestionVal(data[currentField] as string);
+      setQuestionError("");
     }
-    setError("");
-    onSubmit(normalizeUrl(trimmed));
+    // Auto-focus input when step changes
+    if (currentStepIndex > 0 && currentStep.key !== "review" && currentStep.key !== "whyTheyreHere") {
+      setTimeout(() => {
+        if (currentStep.inputType === "text") {
+          inputRef.current?.focus();
+        } else {
+          textareaRef.current?.focus();
+        }
+      }, 200);
+    }
+  }, [currentStepIndex, currentField, data, currentStep]);
+
+  // ─── Handlers ───
+
+  const handleDomainChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value;
+    val = val.replace(/^https?:\/\//i, "");
+    setDomainInput(val);
+    setFaviconError(false);
+    if (websiteError) setWebsiteError("");
   };
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleSubmit();
+  const handleWebsiteSubmit = () => {
+    const trimmed = domainInput.trim();
+    if (!trimmed) {
+      setWebsiteError("Please enter your company website.");
+      return;
+    }
+    const fullUrl = `https://${trimmed}`;
+    if (!isValidUrl(fullUrl)) {
+      setWebsiteError("Please enter a valid website URL (e.g. yourcompany.com)");
+      return;
+    }
+    setWebsiteError("");
+    const normalized = normalizeUrl(fullUrl);
+    updateField("website", normalized);
+    goNext();
+  };
+
+  const handleTextSubmit = () => {
+    if (currentField) {
+      const trimmed = questionVal.trim();
+      if (!currentStep.optional && !trimmed) {
+        setQuestionError("Please provide an answer before continuing.");
+        return;
+      }
+      setQuestionError("");
+      updateField(currentField, trimmed);
+    }
+    goNext();
+  };
+
+  const handleSkip = () => {
+    if (currentField) {
+      updateField(currentField, "");
+    }
+    goNext();
+  };
+
+  // ─── Multi-select handler for "Why they're here" ───
+  const selectedReasons = data.whyTheyreHere || [];
+
+  const toggleReason = (reason: string) => {
+    const updated = selectedReasons.includes(reason)
+      ? selectedReasons.filter((r) => r !== reason)
+      : [...selectedReasons, reason];
+    updateField("whyTheyreHere", updated);
+  };
+
+  const handleReasonsSubmit = () => {
+    if (selectedReasons.length === 0) {
+      setQuestionError("Pick at least one option.");
+      return;
+    }
+    setQuestionError("");
+    goNext();
+  };
+
+  // ─── Launch intelligence pipeline ───
+  const handleLaunchIntelligence = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    setSubmitError("");
+
+    try {
+      const res = await fetch("/api/intelligence/gather", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: "Server error" }));
+        setSubmitError(errData.error || "Failed to start intelligence gathering.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      const result = await res.json();
+      router.push(`/intelligence?session=${result.sessionId}`);
+    } catch {
+      setSubmitError("Network error. Please check your connection.");
+      setIsSubmitting(false);
     }
   };
 
@@ -42,123 +182,442 @@ export function HeroSection({ initialUrl = "", onSubmit }: HeroSectionProps) {
     }
   };
 
+  // ─── Step classification ───
+  const isWebsiteStep = currentStep.key === "website";
+  const isMultiSelectStep = currentStep.key === "whyTheyreHere";
+  const isReviewStep = currentStep.key === "review";
+  const isTextStep = !isWebsiteStep && !isMultiSelectStep && !isReviewStep;
+
   return (
-    <section className="relative min-h-[92vh] flex flex-col justify-between items-center px-6 pt-16 pb-12 overflow-hidden bg-bg-primary text-text-primary">
-      {/* Layer 0: Ferrofluid Background */}
+    <section
+      id="hero-section"
+      className="relative min-h-[92vh] flex flex-col justify-between items-center px-6 pt-16 pb-12 overflow-hidden bg-black text-text-primary"
+    >
+      {/* Layer 0: SideRays */}
       <div
-        className="absolute inset-0 z-0 pointer-events-none"
+        className="absolute inset-0 z-0 pointer-events-none overflow-hidden"
         aria-hidden="true"
       >
-        <Ferrofluid
-          colors={["#ffffff", "#ffffff", "#ffffff"]}
-          speed={0.12}
-          scale={1.9}
-          turbulence={0.8}
-          fluidity={0.12}
-          rimWidth={0.16}
-          sharpness={3}
-          shimmer={0.8}
-          glow={9}
-          flowDirection="down"
-          opacity={0.35}
-          mouseInteraction={true}
-          mouseStrength={0.7}
-          mouseRadius={0.9}
-          mouseDampening={0.2}
-          dpr={typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 1.5) : 1}
+        <SideRays
+          speed={2.5}
+          rayColor1="#8108ea"
+          rayColor2="#ff96fd"
+          intensity={2}
+          spread={2}
+          origin="top-right"
+          tilt={0}
+          saturation={1.5}
+          blend={0.75}
+          falloff={1.6}
+          opacity={1.0}
         />
       </div>
 
-      {/* Layer 1: Soft dark atmospheric overlay for strong text contrast */}
+      {/* Layer 1: Vignette */}
       <div
-        className="absolute inset-0 z-[1] pointer-events-none bg-gradient-to-b from-bg-primary/40 via-transparent to-bg-primary/80"
+        className="absolute inset-0 z-[1] pointer-events-none bg-gradient-to-b from-black/25 via-transparent to-black"
         aria-hidden="true"
       />
 
-      {/* Layer 2: Main Hero Content */}
-      <div className="relative z-[2] w-full max-w-xl mx-auto flex flex-col items-center text-center my-auto py-12">
-        {/* Hand-drawn bird mascot */}
-        <div className="mb-8">
-          <Mascot size={64} />
+      {/* Layer 2: Content */}
+      <div className="relative z-[2] w-full max-w-xl mx-auto flex flex-col items-center text-center my-auto py-10">
+        {/* Mascot */}
+        <div className="mb-6">
+          <Mascot size={isReviewStep ? 52 : 64} />
         </div>
 
-        {/* Confident, editorial headline */}
-        <h1 className="text-4xl sm:text-5xl md:text-6xl font-normal tracking-tight text-text-primary mb-4 leading-[1.12]">
-          What’s your website?
-        </h1>
-
-        {/* Short, direct supporting copy */}
-        <p className="text-text-secondary text-base sm:text-lg max-w-md mb-10 leading-relaxed font-normal">
-          Paste your company website and we&apos;ll take it from there.
-        </p>
-
-        {/* Elegant, calm input bar */}
-        <div className="w-full max-w-lg mx-auto">
-          <div
-            className={`
-              relative flex items-center w-full px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl
-              bg-bg-surface border transition-colors duration-200
-              ${error
-                ? "border-error"
-                : "border-border-subtle hover:border-border-focus focus-within:border-white/30"
-              }
-            `}
-          >
-            {/* Input Element */}
-            <input
-              id="hero-website-input"
-              type="text"
-              value={url}
-              onChange={(e) => {
-                setUrl(e.target.value);
-                if (error) setError("");
-              }}
-              onKeyDown={handleKeyDown}
-              placeholder="https://yourwebsite.com"
-              spellCheck={false}
-              autoComplete="off"
-              className="
-                flex-1 bg-transparent text-text-primary text-base sm:text-lg
-                placeholder:text-text-placeholder focus:outline-none py-1
-              "
-            />
-
-            {/* Continue Arrow Button */}
+        {/* Back + Step Indicator */}
+        {canGoPrev && (
+          <div className="flex items-center justify-between w-full mb-6 px-1">
             <button
-              onClick={handleSubmit}
-              aria-label="Continue with website"
-              className="
-                ml-2 flex items-center justify-center w-9 h-9 rounded-lg
-                bg-text-primary text-bg-primary hover:bg-white
-                transition-colors duration-200 cursor-pointer
-              "
+              onClick={goPrev}
+              className="text-xs text-text-secondary hover:text-[#9d5ce6] transition-colors flex items-center gap-1.5 cursor-pointer"
             >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
-                />
-              </svg>
+              <span>&larr;</span>
+              <span>Back</span>
             </button>
+            <div className="text-xs font-mono text-[#9d5ce6] tracking-wider uppercase font-semibold">
+              Step {currentStepIndex + 1} of {STEPS.length - 1}
+            </div>
           </div>
+        )}
 
-          {/* Validation Error Message */}
-          {error && (
-            <p className="mt-2.5 text-xs sm:text-sm text-error text-left pl-2 animate-fade-in-up">
-              {error}
-            </p>
+        <AnimatePresence mode="wait">
+          {/* ═══════════════════════════════════════════ */}
+          {/* TEXT / TEXTAREA STEPS (company name, name+role, what they sell, pain point) */}
+          {/* ═══════════════════════════════════════════ */}
+          {isTextStep && (
+            <motion.div
+              key={`step-${currentStep.key}`}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="w-full flex flex-col items-center"
+            >
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-normal tracking-tight text-text-primary mb-3 leading-[1.15]">
+                {currentStep.heading}
+              </h1>
+              <p className="text-text-secondary text-sm sm:text-base max-w-lg mb-8 leading-relaxed font-normal">
+                {currentStep.subtext}
+              </p>
+
+              <div className="w-full max-w-lg mx-auto">
+                {currentStep.inputType === "text" ? (
+                  /* Single-line text input */
+                  <div
+                    className={`
+                      relative flex items-center w-full px-4 py-2.5 rounded-xl
+                      bg-bg-surface border transition-all duration-200
+                      border-border-subtle hover:border-[#9d5ce6]/40
+                      focus-within:border-[#9d5ce6] focus-within:shadow-[0_0_22px_rgba(157,92,230,0.22)]
+                    `}
+                  >
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={questionVal}
+                      onChange={(e) => {
+                        setQuestionVal(e.target.value);
+                        if (questionError) setQuestionError("");
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleTextSubmit();
+                        }
+                      }}
+                      placeholder={currentStep.placeholder}
+                      spellCheck={false}
+                      autoComplete="off"
+                      className="flex-1 bg-transparent text-text-primary text-base sm:text-lg placeholder:text-text-placeholder focus:outline-none border-0 outline-none ring-0 p-0"
+                    />
+                    <button
+                      onClick={handleTextSubmit}
+                      aria-label="Continue"
+                      className="ml-2 flex items-center justify-center w-9 h-9 rounded-lg bg-[#9d5ce6] text-white hover:bg-[#ad6ef8] hover:shadow-[0_0_15px_rgba(157,92,230,0.35)] active:scale-95 transition-all cursor-pointer shrink-0"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                      </svg>
+                    </button>
+                  </div>
+                ) : (
+                  /* Textarea input */
+                  <div className="relative w-full rounded-xl bg-bg-surface border border-border-subtle hover:border-[#9d5ce6]/40 focus-within:border-[#9d5ce6] focus-within:shadow-[0_0_22px_rgba(157,92,230,0.2)] transition-all p-3 sm:p-4 text-left">
+                    <textarea
+                      ref={textareaRef}
+                      rows={3}
+                      value={questionVal}
+                      onChange={(e) => {
+                        setQuestionVal(e.target.value);
+                        if (questionError) setQuestionError("");
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                          e.preventDefault();
+                          handleTextSubmit();
+                        }
+                      }}
+                      placeholder={currentStep.placeholder}
+                      className="w-full bg-transparent text-text-primary text-sm sm:text-base placeholder:text-text-placeholder focus:outline-none border-0 outline-none ring-0 p-0 resize-none leading-relaxed"
+                    />
+                    <div className="flex justify-between items-center pt-2 text-[11px] text-text-tertiary">
+                      <span>Press ⌘+Enter to continue</span>
+                    </div>
+                  </div>
+                )}
+
+                {questionError && (
+                  <p className="mt-2.5 text-xs sm:text-sm text-error text-left pl-2 animate-fade-in-up">
+                    {questionError}
+                  </p>
+                )}
+
+                {/* Actions for textarea steps */}
+                {currentStep.inputType === "textarea" && (
+                  <div className="flex items-center justify-end gap-3 mt-5">
+                    {currentStep.optional && (
+                      <button
+                        onClick={handleSkip}
+                        className="px-4 py-2 rounded-lg text-xs sm:text-sm text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
+                      >
+                        {currentStep.skipLabel || "Skip"}
+                      </button>
+                    )}
+                    <button
+                      onClick={handleTextSubmit}
+                      className="px-5 py-2.5 rounded-lg text-xs sm:text-sm font-medium bg-[#9d5ce6] text-white hover:bg-[#ad6ef8] hover:shadow-[0_0_15px_rgba(157,92,230,0.35)] active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <span>Continue</span>
+                      <span>&rarr;</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
           )}
-        </div>
+
+          {/* ═══════════════════════════════════════════ */}
+          {/* WEBSITE STEP (with https:// prefix + favicon) */}
+          {/* ═══════════════════════════════════════════ */}
+          {isWebsiteStep && (
+            <motion.div
+              key="step-website"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="w-full flex flex-col items-center"
+            >
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-normal tracking-tight text-text-primary mb-3 leading-[1.15]">
+                {currentStep.heading}
+              </h1>
+              <p className="text-text-secondary text-sm sm:text-base max-w-md mb-8 leading-relaxed font-normal">
+                {currentStep.subtext}
+              </p>
+
+              <div className="w-full max-w-lg mx-auto">
+                <div
+                  className={`
+                    relative flex items-center w-full px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl
+                    bg-bg-surface border transition-all duration-200 gap-2
+                    ${websiteError
+                      ? "border-error shadow-[0_0_15px_rgba(239,68,68,0.2)]"
+                      : websiteFocused
+                        ? "border-[#9d5ce6] shadow-[0_0_22px_rgba(157,92,230,0.22)]"
+                        : "border-border-subtle hover:border-[#9d5ce6]/40"
+                    }
+                  `}
+                >
+                  {/* Favicon or Globe */}
+                  <div className="w-5 h-5 flex items-center justify-center shrink-0">
+                    {hasValidDomain && !faviconError ? (
+                      <img
+                        key={cleanDomain}
+                        src={`https://www.google.com/s2/favicons?domain=${cleanDomain}&sz=64`}
+                        alt=""
+                        className="w-4 h-4 rounded-sm object-contain animate-fade-in"
+                        onError={() => setFaviconError(true)}
+                      />
+                    ) : (
+                      <svg className="w-4 h-4 text-[#8b7696] select-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="2" y1="12" x2="22" y2="12" />
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                      </svg>
+                    )}
+                  </div>
+
+                  <span className="text-text-tertiary select-none font-mono text-sm sm:text-base tracking-tight shrink-0">
+                    https://
+                  </span>
+
+                  <input
+                    id="hero-website-input"
+                    type="text"
+                    value={domainInput}
+                    onChange={handleDomainChange}
+                    onFocus={() => setWebsiteFocused(true)}
+                    onBlur={() => setWebsiteFocused(false)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleWebsiteSubmit();
+                      }
+                    }}
+                    placeholder="yourcompany.com"
+                    spellCheck={false}
+                    autoComplete="off"
+                    className="flex-1 bg-transparent text-text-primary text-base sm:text-lg placeholder:text-text-placeholder focus:outline-none border-0 outline-none ring-0 p-0"
+                  />
+
+                  <button
+                    onClick={handleWebsiteSubmit}
+                    aria-label="Continue with website"
+                    className="ml-1 flex items-center justify-center w-9 h-9 rounded-lg bg-[#9d5ce6] text-white hover:bg-[#ad6ef8] hover:shadow-[0_0_15px_rgba(157,92,230,0.35)] active:scale-95 transition-all duration-200 cursor-pointer shrink-0"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                    </svg>
+                  </button>
+                </div>
+
+                {websiteError && (
+                  <p className="mt-2.5 text-xs sm:text-sm text-error text-left pl-2 animate-fade-in-up">
+                    {websiteError}
+                  </p>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* ═══════════════════════════════════════════ */}
+          {/* MULTI-SELECT: "Why are you here?" */}
+          {/* ═══════════════════════════════════════════ */}
+          {isMultiSelectStep && (
+            <motion.div
+              key="step-whyhere"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="w-full flex flex-col items-center"
+            >
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-normal tracking-tight text-text-primary mb-3 leading-[1.15]">
+                {currentStep.heading}
+              </h1>
+              <p className="text-text-secondary text-sm sm:text-base max-w-lg mb-8 leading-relaxed font-normal">
+                {currentStep.subtext}
+              </p>
+
+              <div className="w-full max-w-lg mx-auto space-y-2.5">
+                {WHY_HERE_OPTIONS.map((option) => {
+                  const isSelected = selectedReasons.includes(option);
+                  return (
+                    <button
+                      key={option}
+                      onClick={() => {
+                        toggleReason(option);
+                        if (questionError) setQuestionError("");
+                      }}
+                      className={`
+                        w-full text-left px-4 py-3.5 rounded-xl border transition-all duration-200 cursor-pointer
+                        flex items-center gap-3 group
+                        ${isSelected
+                          ? "border-[#9d5ce6] bg-[#9d5ce6]/10 shadow-[0_0_20px_rgba(157,92,230,0.15)]"
+                          : "border-border-subtle bg-bg-surface hover:border-[#9d5ce6]/40 hover:bg-bg-elevated"
+                        }
+                      `}
+                    >
+                      {/* Checkbox indicator */}
+                      <div
+                        className={`
+                          w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all
+                          ${isSelected
+                            ? "border-[#9d5ce6] bg-[#9d5ce6]"
+                            : "border-border-subtle group-hover:border-[#9d5ce6]/50"
+                          }
+                        `}
+                      >
+                        {isSelected && (
+                          <svg className="w-3 h-3 text-white" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </div>
+                      <span className={`text-sm sm:text-base ${isSelected ? "text-text-primary" : "text-text-secondary"}`}>
+                        {option}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {questionError && (
+                <p className="mt-3 text-xs sm:text-sm text-error animate-fade-in-up">
+                  {questionError}
+                </p>
+              )}
+
+              <div className="flex items-center justify-center gap-3 mt-6">
+                <button
+                  onClick={handleReasonsSubmit}
+                  className="px-6 py-2.5 rounded-xl text-sm font-medium bg-[#9d5ce6] text-white hover:bg-[#ad6ef8] hover:shadow-[0_0_15px_rgba(157,92,230,0.35)] active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <span>Continue</span>
+                  <span>&rarr;</span>
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ═══════════════════════════════════════════ */}
+          {/* REVIEW STEP */}
+          {/* ═══════════════════════════════════════════ */}
+          {isReviewStep && (
+            <motion.div
+              key="step-review"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="w-full flex flex-col items-center"
+            >
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-normal tracking-tight text-text-primary mb-3 leading-[1.15]">
+                Here&apos;s what we have so far.
+              </h1>
+              <p className="text-text-secondary text-sm sm:text-base max-w-lg mb-8 leading-relaxed font-normal">
+                Review your answers below or jump to any section to edit.
+              </p>
+
+              {/* Answers Grid */}
+              <div className="w-full max-w-lg mx-auto space-y-2 text-left mb-8 max-h-[360px] overflow-y-auto pr-1">
+                {STEPS.slice(0, -1).map((step, idx) => {
+                  const fieldKey = step.field;
+                  if (!fieldKey) return null;
+                  const raw = data[fieldKey];
+                  const val = Array.isArray(raw) ? raw.join(", ") : raw;
+                  return (
+                    <div
+                      key={step.key}
+                      className="p-3.5 rounded-xl bg-bg-surface border border-border-subtle flex items-start justify-between gap-3 hover:border-[#9d5ce6]/30 transition-all"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[11px] uppercase tracking-wider text-[#9d5ce6] font-semibold mb-0.5">
+                          {step.heading}
+                        </div>
+                        <div className="text-xs sm:text-sm text-text-primary truncate">
+                          {val || <span className="text-text-tertiary italic">Not provided</span>}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => goToStep(idx)}
+                        className="text-xs text-text-tertiary hover:text-white px-2 py-1 rounded bg-bg-elevated hover:bg-[#9d5ce6]/20 transition-all cursor-pointer"
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Launch Intelligence Pipeline */}
+              {submitError && (
+                <p className="text-xs sm:text-sm text-error text-center mb-3 animate-fade-in-up">
+                  {submitError}
+                </p>
+              )}
+              <div className="flex flex-col sm:flex-row items-center gap-3 w-full max-w-lg justify-center">
+                <button
+                  onClick={handleLaunchIntelligence}
+                  disabled={isSubmitting}
+                  className="
+                    w-full sm:w-auto px-7 py-3 rounded-xl font-medium text-sm sm:text-base
+                    bg-[#9d5ce6] text-white hover:bg-[#ad6ef8] hover:shadow-[0_0_20px_rgba(157,92,230,0.35)]
+                    active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                  "
+                >
+                  {isSubmitting ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Starting analysis...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Launch Intelligence</span>
+                      <span>&rarr;</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* Subtle, understated scroll indicator */}
+      {/* Subtle scroll indicator */}
       <div className="relative z-[2] w-full flex justify-center mt-auto pt-4">
         <button
           onClick={scrollToExplore}

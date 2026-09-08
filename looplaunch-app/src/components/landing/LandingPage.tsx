@@ -13,18 +13,20 @@ import { FinalCtaSection } from "./FinalCtaSection";
 import { LandingFooter } from "./LandingFooter";
 
 export function LandingPage() {
-  const { data, updateField, goNext } = useOnboarding();
+  const { data, goToStep } = useOnboarding();
 
-  const handleStartOnboarding = (url: string) => {
-    updateField("website", url);
-    goNext();
+  const handleStartOnboarding = () => {
+    goToStep(0);
+    const heroSection = document.getElementById("hero-section");
+    if (heroSection) {
+      heroSection.scrollIntoView({ behavior: "smooth" });
+    }
   };
 
   const handleScrollToHero = () => {
-    const heroInput = document.getElementById("hero-website-input");
-    if (heroInput) {
-      heroInput.scrollIntoView({ behavior: "smooth", block: "center" });
-      heroInput.focus();
+    const heroSection = document.getElementById("hero-section");
+    if (heroSection) {
+      heroSection.scrollIntoView({ behavior: "smooth" });
     }
   };
 
@@ -33,11 +35,8 @@ export function LandingPage() {
       {/* 1. Navigation */}
       <LandingNav onGetStarted={handleScrollToHero} />
 
-      {/* 2 & 3. Hero / Website Input + Scroll Transition */}
-      <HeroSection
-        initialUrl={data.website}
-        onSubmit={handleStartOnboarding}
-      />
+      {/* 2 & 3. Hero / Inline Onboarding Flow */}
+      <HeroSection />
 
       {/* 4. Section — What is Loop Launch? */}
       <WhatIsLoopLaunchSection />
@@ -59,8 +58,7 @@ export function LandingPage() {
 
       {/* 10. Final CTA */}
       <FinalCtaSection
-        initialUrl={data.website}
-        onSubmit={handleStartOnboarding}
+        onGetStarted={handleStartOnboarding}
       />
 
       {/* 11. Footer */}

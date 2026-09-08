@@ -123,22 +123,21 @@ export function StrategyOutputSection() {
         {/* Strategic Deliverable View with Spotlight Cursor Glow */}
         <SpotlightCard
           radius={420}
-          surfaceGlow="rgba(255, 255, 255, 0.04)"
-          borderGlow="rgba(255, 255, 255, 0.22)"
+          surfaceGlow="rgba(0, 54, 125, 0.22)"
+          borderGlow="rgba(129, 8, 234, 0.55)"
           className={`
             border border-border-subtle bg-bg-surface rounded-xl overflow-hidden
             transition-all duration-700
-            ${
-              isVisible
-                ? "opacity-100 translate-y-0"
-                : "opacity-0 translate-y-6"
+            ${isVisible
+              ? "opacity-100 translate-y-0"
+              : "opacity-0 translate-y-6"
             }
           `}
         >
           <div className="grid grid-cols-1 md:grid-cols-12 min-h-[460px]">
             {/* Left Nav */}
             <div className="md:col-span-4 border-b md:border-b-0 md:border-r border-border-subtle p-4 sm:p-6 space-y-1">
-              <div className="text-xs uppercase tracking-widest text-text-tertiary font-medium mb-4 px-3">
+              <div className="text-xs uppercase tracking-widest text-[#8108ea] font-semibold mb-4 px-3">
                 Deliverables
               </div>
               {STRATEGY_DELIVERABLES.map((item, idx) => (
@@ -146,11 +145,10 @@ export function StrategyOutputSection() {
                   key={item.id}
                   onClick={() => setActiveTab(idx)}
                   className={`
-                    w-full text-left px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer
-                    ${
-                      activeTab === idx
-                        ? "text-text-primary font-medium bg-bg-elevated"
-                        : "text-text-secondary hover:text-text-primary"
+                    w-full text-left px-3 py-2 rounded-lg text-sm transition-all cursor-pointer
+                    ${activeTab === idx
+                      ? "text-white font-medium bg-[#1d0b2e] border-l-2 border-[#8108ea] shadow-[0_0_15px_rgba(129,8,234,0.15)]"
+                      : "text-text-secondary hover:text-text-primary hover:bg-bg-elevated/40"
                     }
                   `}
                 >
@@ -184,7 +182,7 @@ export function StrategyOutputSection() {
                         key={i}
                         className="text-sm sm:text-base text-text-secondary flex items-baseline gap-3"
                       >
-                        <span className="text-text-tertiary font-mono text-xs">
+                        <span className="text-[#8108ea] font-mono text-xs font-semibold">
                           0{i + 1}
                         </span>
                         <span className="font-normal">{point}</span>

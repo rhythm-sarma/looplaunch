@@ -2,18 +2,29 @@
 
 /* ─── Design Tokens ─── */
 :root {
-  --bg-primary: #080808;
-  --bg-surface: #111111;
-  --bg-elevated: #161616;
-  --bg-hover: #1C1C1C;
-  --border-subtle: #1F1F1F;
-  --border-focus: #333333;
-  --text-primary: #F5F5F5;
-  --text-secondary: #888888;
-  --text-tertiary: #555555;
-  --text-placeholder: #444444;
-  --accent: #E5E5E5;
+  --bg-primary: #000000;
+  --bg-surface: #0a0510;
+  --bg-elevated: #140920;
+  --bg-hover: #1d0d2e;
+  --border-subtle: #251238;
+  --border-focus: #8108ea;
+  --text-primary: #f9f5f2;
+  --text-secondary: #b8a6c4;
+  --text-tertiary: #756282;
+  --text-placeholder: #503d5c;
+  --accent: #8108ea;
+  --accent-purple: #8000a4;
+  --accent-violet: #8108ea;
+  --accent-blue: #00367d;
+  --accent-pink: #ff96fd;
+  --accent-gray: #d9d9d9;
   --error: #EF4444;
+
+  /* ─── Button Theme Tokens (Configurable here) ─── */
+  --btn-purple: #9d5ce6;
+  --btn-purple-hover: #ad6ef8;
+  --btn-purple-text: #ffffff;
+  --btn-purple-glow: rgba(157, 92, 230, 0.28);
 
   --background: var(--bg-primary);
   --foreground: var(--text-primary);
@@ -33,6 +44,13 @@
   --color-text-tertiary: var(--text-tertiary);
   --color-text-placeholder: var(--text-placeholder);
   --color-accent: var(--accent);
+  --color-accent-purple: var(--accent-purple);
+  --color-accent-violet: var(--accent-violet);
+  --color-accent-blue: var(--accent-blue);
+  --color-accent-pink: var(--accent-pink);
+  --color-accent-gray: var(--accent-gray);
+  --color-btn-purple: var(--btn-purple);
+  --color-btn-purple-hover: var(--btn-purple-hover);
   --color-error: var(--error);
   --font-sans: var(--font-instrument);
 }
@@ -52,7 +70,7 @@ body {
 
 /* ─── Selection ─── */
 ::selection {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(129, 8, 234, 0.35);
   color: var(--text-primary);
 }
 
@@ -60,6 +78,18 @@ body {
 :focus-visible {
   outline: 1px solid var(--border-focus);
   outline-offset: 2px;
+}
+
+/* Prevent rectangular browser focus boxes from appearing inside text inputs */
+input,
+textarea,
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible {
+  outline: none !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
 }
 
 /* ─── Scrollbar ─── */
@@ -82,6 +112,7 @@ body {
     opacity: 0;
     transform: translateY(12px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -93,6 +124,7 @@ body {
     opacity: 1;
     transform: translateY(0);
   }
+
   to {
     opacity: 0;
     transform: translateY(-8px);
@@ -100,9 +132,12 @@ body {
 }
 
 @keyframes mascotFloat {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translateY(0);
   }
+
   50% {
     transform: translateY(-6px);
   }
@@ -112,9 +147,11 @@ body {
   0% {
     opacity: 0.5;
   }
+
   50% {
     opacity: 1;
   }
+
   100% {
     opacity: 0.5;
   }
@@ -137,10 +174,10 @@ html {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .animate-fade-in-up,
   .animate-fade-out,
   .animate-mascot-float {
     animation: none;
   }
 }
-

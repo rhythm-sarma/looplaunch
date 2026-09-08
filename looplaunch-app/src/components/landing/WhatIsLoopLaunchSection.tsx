@@ -58,11 +58,10 @@ export function WhatIsLoopLaunchSection() {
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-16 lg:gap-24 items-start">
         {/* Left Column: Editorial Statement */}
         <div
-          className={`lg:col-span-6 space-y-6 transition-all duration-700 ${
-            isVisible
+          className={`lg:col-span-6 space-y-6 transition-all duration-700 ${isVisible
               ? "opacity-100 translate-y-0"
               : "opacity-0 translate-y-6"
-          }`}
+            }`}
         >
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-normal tracking-tight text-text-primary leading-[1.2] flex items-center">
             <RotatingText
@@ -93,11 +92,10 @@ export function WhatIsLoopLaunchSection() {
 
         {/* Right Column: How Loop Launch thinks (Strategic Framework) */}
         <div
-          className={`lg:col-span-6 transition-all duration-700 delay-150 ${
-            isVisible
+          className={`lg:col-span-6 transition-all duration-700 delay-150 ${isVisible
               ? "opacity-100 translate-y-0"
               : "opacity-0 translate-y-6"
-          }`}
+            }`}
         >
           <div className="text-xs uppercase tracking-widest text-text-tertiary font-medium mb-6">
             How Loop Launch thinks
@@ -107,13 +105,13 @@ export function WhatIsLoopLaunchSection() {
             {STRATEGY_STEPS.map((step) => (
               <StaggerItem key={step.num}>
                 <SpotlightCard
-                  className="p-5 sm:p-6 bg-[#0b0b0b] transition-colors"
+                  className="p-5 sm:p-6 bg-bg-surface border border-border-subtle hover:border-[#8108ea]/40 transition-colors"
                   radius={320}
-                  surfaceGlow="rgba(255, 255, 255, 0.05)"
-                  borderGlow="rgba(255, 255, 255, 0.25)"
+                  surfaceGlow="rgba(0, 54, 125, 0.2)"
+                  borderGlow="rgba(129, 8, 234, 0.5)"
                 >
                   <div className="flex items-baseline gap-5 sm:gap-7">
-                    <span className="font-mono text-xs text-text-tertiary w-6">
+                    <span className="font-mono text-xs text-[#8108ea] font-semibold w-6">
                       {step.num}
                     </span>
                     <div className="flex-1">

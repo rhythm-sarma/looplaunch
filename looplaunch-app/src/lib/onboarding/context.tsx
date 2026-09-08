@@ -10,7 +10,6 @@ import {
 } from "react";
 import {
   type OnboardingData,
-  type StepKey,
   EMPTY_ONBOARDING,
   STEPS,
 } from "./types";
@@ -22,7 +21,7 @@ interface OnboardingContextValue {
   currentStepIndex: number;
   currentStep: (typeof STEPS)[number];
   totalSteps: number;
-  updateField: (field: keyof OnboardingData, value: string) => void;
+  updateField: (field: keyof OnboardingData, value: string | string[]) => void;
   goNext: () => void;
   goPrev: () => void;
   goToStep: (index: number) => void;
@@ -71,7 +70,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   const totalSteps = STEPS.length;
 
   const updateField = useCallback(
-    (field: keyof OnboardingData, value: string) => {
+    (field: keyof OnboardingData, value: string | string[]) => {
       setData((prev) => ({ ...prev, [field]: value }));
     },
     []

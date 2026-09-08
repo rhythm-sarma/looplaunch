@@ -61,13 +61,13 @@ export function RoadmapSection() {
           {ROADMAP_PHASES.map((phase) => (
             <StaggerItem key={phase.period} className="h-full">
               <SpotlightCard
-                className="h-full flex flex-col p-8 rounded-xl bg-[#0b0b0b] hover:bg-[#0f0f0f] transition-colors"
+                className="h-full flex flex-col p-8 rounded-xl bg-bg-surface hover:bg-bg-elevated border border-border-subtle hover:border-[#8108ea]/50 transition-colors"
                 radius={380}
-                surfaceGlow="rgba(255, 255, 255, 0.05)"
-                borderGlow="rgba(255, 255, 255, 0.25)"
+                surfaceGlow="rgba(0, 54, 125, 0.22)"
+                borderGlow="rgba(129, 8, 234, 0.55)"
               >
                 {/* Period marker */}
-                <div className="text-xs font-mono tracking-widest text-text-tertiary mb-6 uppercase">
+                <div className="text-xs font-mono tracking-widest text-[#8108ea] font-semibold mb-6 uppercase">
                   {phase.period}
                 </div>
 
@@ -80,10 +80,10 @@ export function RoadmapSection() {
                 </p>
 
                 {/* Action items */}
-                <div className="space-y-4 pt-6 border-t border-border-subtle/50 flex-1">
+                <div className="space-y-4 pt-6 border-t border-border-subtle flex-1">
                   {phase.actions.map((act, i) => (
                     <div key={i} className="flex items-start gap-3 text-sm text-text-secondary">
-                      <span className="text-text-tertiary font-mono text-xs mt-1 select-none">—</span>
+                      <span className="text-[#8108ea] font-mono text-xs mt-1 select-none">—</span>
                       <span className="leading-snug text-text-secondary">{act}</span>
                     </div>
                   ))}

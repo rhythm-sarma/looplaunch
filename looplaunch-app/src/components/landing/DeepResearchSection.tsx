@@ -90,10 +90,10 @@ export function DeepResearchSection() {
           {RESEARCH_AREAS.map((area) => (
             <StaggerItem key={area.title} className="h-full">
               <SpotlightCard
-                className="h-full p-7 sm:p-8 bg-[#0b0b0b] hover:bg-[#0f0f0f] transition-colors flex flex-col justify-between"
+                className="h-full p-7 sm:p-8 bg-bg-surface hover:bg-bg-elevated border border-border-subtle hover:border-[#8108ea]/50 transition-colors flex flex-col justify-between"
                 radius={360}
-                surfaceGlow="rgba(255, 255, 255, 0.05)"
-                borderGlow="rgba(255, 255, 255, 0.25)"
+                surfaceGlow="rgba(0, 54, 125, 0.22)"
+                borderGlow="rgba(129, 8, 234, 0.55)"
               >
                 <div>
                   <h3 className="text-xl sm:text-2xl font-medium tracking-tight text-text-primary mb-3">
@@ -110,7 +110,7 @@ export function DeepResearchSection() {
                         key={item}
                         className="text-xs sm:text-sm text-text-secondary flex items-baseline gap-2.5"
                       >
-                        <span className="text-text-tertiary">&ndash;</span>
+                        <span className="text-[#8108ea] font-medium">&ndash;</span>
                         <span>{item}</span>
                       </div>
                     ))}
