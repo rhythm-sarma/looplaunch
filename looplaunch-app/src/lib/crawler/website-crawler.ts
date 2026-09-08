@@ -217,7 +217,27 @@ export async function crawlUrl(url: string): Promise<CrawledPage> {
  * Crawl a website and its key subpages (about, pricing, etc.).
  */
 export async function crawlWebsite(websiteUrl: string): Promise<CrawlResult> {
-  const domain = new URL(websiteUrl).hostname;
+  if (!websiteUrl || !websiteUrl.trim().startsWith("http")) {
+    return {
+      pages: [],
+      domain: "",
+      totalPages: 0,
+      crawledAt: new Date().toISOString(),
+    };
+  }
+
+  let domain = "";
+  try {
+    domain = new URL(websiteUrl).hostname;
+  } catch {
+    return {
+      pages: [],
+      domain: "",
+      totalPages: 0,
+      crawledAt: new Date().toISOString(),
+    };
+  }
+
   console.log(`[Crawler] Starting website crawl: ${domain}`);
 
   // Crawl the main page first

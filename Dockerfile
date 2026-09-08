@@ -1,49 +1,38 @@
 # ─────────────────────────────────────────────────────────
-# Crawl4AI Service — Docker image for Render deployment
+# Loop Launch Next.js Web App — Render Production Dockerfile
 # ─────────────────────────────────────────────────────────
-# Uses Python 3.11-slim with Chromium and Playwright.
-# Render will build and deploy this as a Web Service.
-# ─────────────────────────────────────────────────────────
+FROM node:20-alpine AS builder
 
-FROM python:3.11-slim
+WORKDIR /app
 
-# Install system dependencies for Playwright/Chromium
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget \
-    gnupg \
-    ca-certificates \
-    fonts-liberation \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libatk1.0-0 \
-    libcups2 \
-    libdbus-1-3 \
-    libdrm2 \
-    libgbm1 \
-    libgtk-3-0 \
-    libnspr4 \
-    libnss3 \
-    libx11-xcb1 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxrandr2 \
-    xdg-utils \
-    && rm -rf /var/lib/apt/lists/*
+# Copy package manifests from looplaunch-app subdirectory
+COPY looplaunch-app/package.json looplaunch-app/package-lock.json* ./
 
-# Install Crawl4AI
-RUN pip install --no-cache-dir crawl4ai[all]
+# Install all dependencies
+RUN npm install
 
-# Install Playwright browsers
-RUN playwright install chromium
-RUN playwright install-deps chromium
+# Copy application source
+COPY looplaunch-app/ ./
 
-# Expose the default Crawl4AI API port
-EXPOSE 11235
+# Disable Next.js telemetry
+ENV NEXT_TELEMETRY_DISABLED=1
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:11235/health || exit 1
+# Build the Next.js production bundle
+RUN npm run build
 
-# Start the Crawl4AI API server
-# PORT env var is set by Render automatically
-CMD crawl4ai-server --host 0.0.0.0 --port ${PORT:-11235}
+# ─── Production Runner ───
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+
+# Copy entire application and build output
+COPY --from=builder /app ./
+
+EXPOSE 3000
+
+# Start Next.js bound to 0.0.0.0 with dynamic PORT support for Render
+CMD ["sh", "-c", "npx next start -p ${PORT:-3000} -H 0.0.0.0"]
