@@ -8,9 +8,19 @@
  */
 
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/intelligence/store";
+import { getSession, addMessageToSession } from "@/lib/intelligence/store";
 import { answerQuestion } from "@/lib/ai/gemini";
-import type { AskResponse, StrategicQuestion } from "@/lib/intelligence/types";
+import { researchQuestion } from "@/lib/research/tavily";
+import { analyzeUserQuery } from "@/lib/ai/query-classifier";
+import type {
+  AskResponse,
+  StrategicQuestion,
+  CompanyIntelligence,
+  MarketIntelligence,
+  StrategicDiagnosis,
+  ChatMessage,
+  TavilySearchResult,
+} from "@/lib/intelligence/types";
 
 export async function POST(request: Request) {
   try {
@@ -25,9 +35,17 @@ export async function POST(request: Request) {
     }
 
     const { sessionId, question } = body;
+    console.log(`\n[PIPELINE] Strategic question received (Session: ${sessionId})`);
+    console.log(`[PIPELINE] Question: "${question}"`);
 
-    // Get session
-    const session = getSession(sessionId);
+    // Get session (or fallback test session if testing directly)
+    let session = getSession(sessionId);
+
+    if (!session && (sessionId === "test" || sessionId.startsWith("test_"))) {
+      console.log(`[PIPELINE] Using demo test session context for sessionId: "${sessionId}"`);
+      session = getSession("test"); // Trigger createTestSession
+    }
+
     if (!session) {
       return NextResponse.json(
         { error: "Session not found or expired" },
@@ -43,11 +61,11 @@ export async function POST(request: Request) {
           status: session.status,
           statusMessage: session.statusMessage,
         },
-        { status: 409 } // Conflict — pipeline not ready yet
+        { status: 409 }
       );
     }
 
-    // Verify we have all required intelligence
+    // Verify required intelligence
     if (
       !session.companyIntelligence ||
       !session.marketIntelligence ||
@@ -59,16 +77,77 @@ export async function POST(request: Request) {
       );
     }
 
-    // Answer the question using Gemini + stored intelligence
+    // Capture conversation history before this turn
+    const priorHistory: ChatMessage[] = session.messages ? [...session.messages] : [];
+
+    // ─── STEP 1: Add User Message to Persistent History ───
+    const userMessage: ChatMessage = {
+      id: `msg_u_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      role: "user",
+      content: question,
+      timestamp: new Date().toISOString(),
+    };
+    addMessageToSession(sessionId, userMessage);
+
+    // ─── STEP 2: Query Understanding & Intent Classification ───
+    const analysis = analyzeUserQuery(
+      question,
+      priorHistory,
+      session.companyIntelligence.name
+    );
+    console.log(`[QUERY UNDERSTANDING] Intent: ${analysis.intent} | Needs Search: ${analysis.needsWebResearch}`);
+    if (analysis.resolvedReference) {
+      console.log(`[QUERY UNDERSTANDING] Resolved Reference: ${analysis.resolvedReference}`);
+    }
+
+    // ─── STEP 3: Selective Web Research (Only when factual search is required) ───
+    let researchResults: TavilySearchResult[] = [];
+    let researchStatus: "success" | "no_results" | "failed" | "unconfigured" = "unconfigured";
+
+    if (analysis.needsWebResearch && analysis.searchQuery) {
+      const research = await researchQuestion(
+        analysis.searchQuery,
+        session.companyIntelligence?.industry
+      );
+      researchResults = research.results;
+      researchStatus = research.status;
+    }
+
+    // ─── STEP 4: Conversational Strategic Reasoning ───
     const answer = await answerQuestion(
       question,
       session.companyIntelligence,
       session.competitorIntelligence || [],
       session.marketIntelligence,
-      session.diagnosis
+      session.diagnosis,
+      researchResults,
+      researchStatus,
+      priorHistory,
+      session.conversationSummary,
+      analysis
     );
 
-    const response: AskResponse = { answer };
+    // ─── STEP 5: Add Assistant Response to Persistent History ───
+    const assistantMessage: ChatMessage = {
+      id: `msg_a_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      role: "assistant",
+      content: answer.answer,
+      timestamp: new Date().toISOString(),
+      evidence: answer.evidence,
+      sources: answer.sources,
+      confidence: answer.confidence,
+      followUpQuestions: answer.followUpQuestions,
+      queryIntent: analysis.intent,
+      researchStatus: answer.researchStatus,
+    };
+    addMessageToSession(sessionId, assistantMessage);
+
+    console.log(`[PIPELINE] Conversational answer saved for session: ${sessionId}\n`);
+
+    const response: AskResponse = {
+      answer,
+      messages: session.messages,
+    };
     return NextResponse.json(response);
   } catch (error) {
     console.error("[API] /intelligence/ask error:", error);

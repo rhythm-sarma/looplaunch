@@ -104,13 +104,15 @@ async function runPipeline(sessionId: string, input: OnboardingInput) {
     // ─── STAGE 3: Market Research (Tavily) ───
     updateStatus(sessionId, "researching_market", "Analyzing your market...");
     let marketResearchText = "";
+    let rawTavilyResults: import("@/lib/intelligence/types").TavilySearchResult[] = [];
     try {
-      const { summaryText } = await runMarketResearch(
+      const { allResults, summaryText } = await runMarketResearch(
         input.whatTheySell,
         input.painPoint,
         input.competitors
       );
       marketResearchText = summaryText;
+      rawTavilyResults = allResults;
     } catch (e) {
       console.warn("[Pipeline] Market research failed:", e);
     }
@@ -135,10 +137,15 @@ async function runPipeline(sessionId: string, input: OnboardingInput) {
     updateSession(sessionId, { competitorIntelligence: competitorIntels });
 
     // ─── STAGE 6: Gemini — Analyze Market ───
+    // Raw Tavily results are stored on marketIntelligence.searchResults
+    // so they remain separate from Gemini's synthesized intelligence.
     updateStatus(sessionId, "analyzing_market", "Understanding market dynamics...");
     const marketIntel = await analyzeMarket(input, marketResearchText);
     updateSession(sessionId, {
-      marketIntelligence: marketIntel,
+      marketIntelligence: {
+        ...marketIntel,
+        searchResults: rawTavilyResults,
+      },
     });
 
     // ─── STAGE 7: Gemini — Strategic Diagnosis ───
@@ -181,12 +188,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check Gemini is configured
+    // Log warning if Gemini is using fallback mode
     if (!process.env.GEMINI_API_KEY) {
-      return NextResponse.json(
-        { error: "Gemini API key is not configured. Set GEMINI_API_KEY in .env.local" },
-        { status: 500 }
-      );
+      console.warn("[Pipeline] GEMINI_API_KEY is not set — pipeline will operate using contextual demo mode.");
     }
 
     // Create session and start pipeline asynchronously

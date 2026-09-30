@@ -97,6 +97,10 @@ export interface TavilySearchResult {
   url: string;
   content: string;
   score: number;
+  /** Date the source was published (ISO string or null if unavailable) */
+  publishedDate: string | null;
+  /** Domain/hostname of the source (e.g. "forbes.com") */
+  source: string;
 }
 
 // ──────────────────────────────────────────────
@@ -159,6 +163,19 @@ export type PipelineStatus =
   | "ready"
   | "error";
 
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+  evidence?: StrategicEvidence[];
+  sources?: ResearchSource[];
+  confidence?: "high" | "medium" | "low";
+  followUpQuestions?: string[];
+  queryIntent?: string;
+  researchStatus?: "success" | "no_results" | "failed" | "unconfigured";
+}
+
 export interface IntelligenceSession {
   id: string;
   status: PipelineStatus;
@@ -168,6 +185,10 @@ export interface IntelligenceSession {
   competitorIntelligence?: CompetitorIntelligence[];
   marketIntelligence?: MarketIntelligence;
   diagnosis?: StrategicDiagnosis;
+  /** Persistent chronological conversation history */
+  messages?: ChatMessage[];
+  /** Rolling executive summary of older messages when conversation becomes long */
+  conversationSummary?: string;
   createdAt: string;
   updatedAt: string;
   error?: string;
@@ -180,21 +201,39 @@ export interface IntelligenceSession {
 export interface StrategicQuestion {
   sessionId: string;
   question: string;
+  history?: { role: "user" | "assistant"; content: string }[];
+}
+
+export interface StrategicEvidence {
+  source: string;
+  insight: string;
+  url?: string;
+}
+
+export interface ResearchSource {
+  title: string;
+  url: string;
+  source: string;
+  score?: number;
+  publishedDate?: string | null;
 }
 
 export interface StrategicAnswer {
   question: string;
   answer: string;
-  /** Evidence/sources used to generate the answer */
-  evidence: {
-    source: string;
-    insight: string;
-  }[];
+  /** Evidence items supporting the answer with insights and URLs (only when factually relevant) */
+  evidence?: StrategicEvidence[];
+  /** Normalized web research sources from Tavily (only when web research was performed) */
+  sources?: ResearchSource[];
   /** Confidence level */
-  confidence: "high" | "medium" | "low";
-  /** Follow-up questions the user might want to ask */
-  followUpQuestions: string[];
+  confidence?: "high" | "medium" | "low";
+  /** Optional contextual follow-up questions */
+  followUpQuestions?: string[];
   generatedAt: string;
+  /** Status of web research performed for this answer */
+  researchStatus?: "success" | "no_results" | "failed" | "unconfigured";
+  /** Internal classification of query intent */
+  queryIntent?: string;
 }
 
 // ──────────────────────────────────────────────
@@ -215,9 +254,12 @@ export interface StatusResponse {
   hasCompetitorIntelligence: boolean;
   hasMarketIntelligence: boolean;
   hasDiagnosis: boolean;
+  companyName?: string;
+  messages?: ChatMessage[];
   error?: string;
 }
 
 export interface AskResponse {
   answer: StrategicAnswer;
+  messages?: ChatMessage[];
 }

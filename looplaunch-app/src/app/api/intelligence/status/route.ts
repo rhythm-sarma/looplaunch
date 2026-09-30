@@ -38,6 +38,8 @@ export async function GET(request: Request) {
       !!session.competitorIntelligence && session.competitorIntelligence.length > 0,
     hasMarketIntelligence: !!session.marketIntelligence,
     hasDiagnosis: !!session.diagnosis,
+    companyName: session.onboardingInput?.companyName || session.companyIntelligence?.name,
+    messages: session.messages || [],
     error: session.error,
   };
 

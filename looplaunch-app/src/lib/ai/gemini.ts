@@ -16,6 +16,10 @@ import type {
   MarketIntelligence,
   StrategicDiagnosis,
   StrategicAnswer,
+  StrategicEvidence,
+  ResearchSource,
+  TavilySearchResult,
+  ChatMessage,
 } from "../intelligence/types";
 import {
   buildCompanyAnalysisPrompt,
@@ -23,7 +27,9 @@ import {
   buildMarketAnalysisPrompt,
   buildDiagnosisPrompt,
   buildQuestionAnswerPrompt,
+  buildConversationalAdvisorPrompt,
 } from "./prompts";
+import type { QueryAnalysis } from "./query-classifier";
 
 // ──────────────────────────────────────────────
 // Singleton Client
@@ -42,12 +48,12 @@ function getClient(): GoogleGenerativeAI | null {
   return genAI;
 }
 
-function getModel() {
+function getModel(modelName = "gemini-3.5-flash-lite") {
   const client = getClient();
   if (!client) return null;
 
   return client.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: modelName,
     generationConfig: {
       temperature: 0.3,
       maxOutputTokens: 4096,
@@ -300,32 +306,117 @@ function getMockDiagnosis(
 
 function getMockStrategicAnswer(
   question: string,
-  companyIntel: CompanyIntelligence
+  companyIntel: CompanyIntelligence,
+  researchResults?: TavilySearchResult[],
+  researchStatus?: "success" | "no_results" | "failed" | "unconfigured",
+  _history: ChatMessage[] = [],
+  analysis?: QueryAnalysis
 ): StrategicAnswer {
+  const intent = analysis?.intent || "general_strategic";
+
+  let responseText = "";
+  let evidenceList: StrategicEvidence[] = [];
+  let sourcesList: ResearchSource[] = [];
+  let followUps: string[] = [];
+
+  switch (intent) {
+    case "follow_up_why": {
+      responseText = `The primary reason comes down to resource asymmetry and buyer evaluation friction.\n\nLegacy incumbents in this space rely heavily on multi-layered sales pipelines, high platform retainers, and opaque pricing. Because ${companyIntel.name} operates with a modern, lightweight tech stack, trying to match their feature checklist item-for-item dilutes your core speed advantage.\n\nDissatisfied switchers aren't looking for another bloated suite—they are actively seeking high-velocity tooling that eliminates their immediate operational bottlenecks without forced contract lock-in.`;
+      followUps = [
+        "How do we actually fix this in our positioning?",
+        "Who is currently the most vulnerable competitor to this angle?",
+      ];
+      break;
+    }
+    case "follow_up_how": {
+      responseText = `Here is how I would approach fixing this in 3 immediate operational steps:\n\n1. **Build a High-Intent Comparison Teardown:** Create dedicated comparison landing pages contrasting your transparent pricing and fast onboarding against the incumbent's fee structure.\n2. **Target Dissatisfied Switcher Communities:** Engage directly in operator forums and communities where merchants discuss frustration with legacy app fees and rigid contract terms.\n3. **Deploy a Self-Serve Interactive Demo:** Remove sales qualification friction so high-intent prospects can experience your speed advantage within their first 2 minutes.`;
+      followUps = [
+        "What if we target SMBs instead of mid-market?",
+        "Give me a concrete 30-day plan to launch this.",
+      ];
+      break;
+    }
+    case "competitor_comparison": {
+      const target = analysis?.resolvedReference?.replace("Target competitor: ", "") || "BigCommerce";
+      responseText = `When comparing **${companyIntel.name}** directly against **${target}**:\n\n• **Core Model:** ${target} offers a robust, feature-dense hosted platform with native product filtering, but enforces mandatory plan upgrades based on annual sales thresholds. In contrast, ${companyIntel.name} prioritizes lightweight velocity, modern ergonomics, and transparent pricing without penalty thresholds.\n• **Where You Win:** 10x faster time-to-insight, zero app ecosystem bloat, and frictionless integration.\n• **Where They Have Leverage:** Established enterprise partner networks and multi-decade market presence.\n• **Vulnerability:** They would likely attack us on third-party ecosystem size, which we can counter by emphasizing purpose-built native speed.`;
+      followUps = [
+        `What specific messaging hook best counters ${target}?`,
+        "Would that change our pricing strategy?",
+      ];
+      break;
+    }
+    case "scenario_shift": {
+      responseText = `Pivoting to target SMBs fundamentally shifts your customer acquisition economics and product requirements:\n\n• **What Becomes Easier:** Sales cycles shrink from months to days, and self-serve onboarding drives rapid organic word-of-mouth adoption.\n• **The Catch:** SMB churn is inherently higher (typically 2-4% monthly), requiring a relentless focus on fast time-to-value and low customer acquisition costs.\n• **Strategic Recommendation:** If you pursue SMBs, you must strip away all onboarding friction, introduce transparent monthly pricing, and rely on intent-driven organic search rather than high-touch outbound sales.`;
+      followUps = [
+        "Would that change our pricing strategy?",
+        "Give me 3 landing page ideas for SMB operators.",
+      ];
+      break;
+    }
+    case "pricing_inquiry": {
+      responseText = `Yes — this fundamentally changes the pricing equation.\n\nIn this scenario, a high enterprise contract model will create fatal top-of-funnel friction. Instead, adopting a transparent, value-aligned pricing model (e.g. usage-based or transparent fixed tiers without hidden add-on fees) counter-positions you directly against incumbents whose escalating app costs frustrate growing operators.\n\nThis turns your pricing from an administrative hurdle into an active acquisition weapon.`;
+      followUps = [
+        "How should our tiers be structured?",
+        "Give me a concrete 30-day plan to roll this out.",
+      ];
+      break;
+    }
+    case "action_plan": {
+      responseText = `Here is a concrete 30-day action plan broken into weekly sprints:\n\n• **Week 1 (Positioning & Messaging):** Audit the top 5 complaints on incumbent reviews (G2, Trustpilot) and craft a sharp contrast narrative around speed and transparent pricing.\n• **Week 2 (High-Intent Landing Pages):** Deploy 2 comparative landing pages targeting keywords like "[Incumbent] alternatives" and "[Incumbent] pricing teardown".\n• **Week 3 (Direct Operator Outbound):** Run a targeted outbound sequence to 100 verified operators who recently voiced frustration with legacy contract renewals.\n• **Week 4 (Feedback Loop & Optimization):** Analyze conversion rates on the teardown pages and double down on the single messaging hook that generated the highest reply rate.`;
+      followUps = [
+        "What metrics should we track in Week 1?",
+        "How do we source the first 100 verified accounts?",
+      ];
+      break;
+    }
+    case "weakness_or_problem": {
+      responseText = `Our single biggest competitive vulnerability right now is **category awareness and top-of-funnel reach**.\n\nWhile ${companyIntel.name} holds a clear product ergonomics and velocity advantage, legacy incumbents possess decades of brand equity and established procurement relationships. If an operator isn't actively searching for an alternative to legacy bloat, default inertia keeps them locked into incumbent contracts.\n\nSolving this requires aggressive, high-contrast positioning rather than playing polite feature-matching.`;
+      followUps = [
+        "Why is brand inertia so strong in this market?",
+        "Who are the top 3 competitors exploiting that awareness gap?",
+      ];
+      break;
+    }
+    case "competitor_inquiry": {
+      responseText = `Based on current market structure, your top 3 competitors span three distinct category tiers:\n\n1. **Shopify:** The market-share giant dominating SMB and mid-market commerce, backed by a massive app store but burdened by escalating ecosystem transaction fees.\n2. **BigCommerce:** The primary hosted SaaS alternative, featuring robust native filtering and zero payment-gateway penalties, but forcing tier upgrades as merchant revenue scales.\n3. **WooCommerce:** The open-source WordPress standard capturing content-first merchants, offering total data ownership but requiring heavy maintenance and plugin management.`;
+      followUps = [
+        "Compare us with the second one.",
+        "What would they attack us on?",
+      ];
+      break;
+    }
+    default: {
+      if (researchResults && researchResults.length > 0) {
+        responseText = `Based on real-time market data regarding "${question}":\n\n` +
+          researchResults.slice(0, 3).map((r, i) => `${i + 1}. **${r.title}** (${r.source}): ${r.content.substring(0, 180)}...`).join("\n\n") +
+          `\n\nFor ${companyIntel.name}, this underscores the need to capitalize on competitors' inflexibility by maintaining aggressive agility and transparent pricing.`;
+        evidenceList = researchResults.map((r) => ({
+          source: r.source,
+          insight: `${r.title}: ${r.content.slice(0, 180)}...`,
+          url: r.url,
+        }));
+        sourcesList = researchResults.map((r) => ({
+          title: r.title,
+          url: r.url,
+          source: r.source,
+        }));
+      } else {
+        responseText = `For ${companyIntel.name}, the key strategic priority regarding "${question}" is leveraging our core agility and focused value narrative to outmaneuver slower, legacy alternatives.\n\nRather than competing across broad awareness channels, concentrating our messaging on acute operational pain points yields significantly higher conversion and positioning authority.`;
+      }
+      break;
+    }
+  }
+
   return {
     question,
-    answer: `For ${companyIntel.name}, the highest leverage move right now is focusing on sharp differentiation and capturing high-intent demand rather than running broad, generic awareness campaigns.\n\nBecause ${companyIntel.name} solves acute friction in ${companyIntel.description}, targeting buyers who are already dissatisfied with legacy alternatives produces significantly higher conversion rates at a fraction of the cost.\n\nRecommended actions:\n1. Deploy targeted landing pages contrasting your agile speed with legacy complexity.\n2. Leverage founder-led strategic teardowns to build authentic domain authority.\n3. Implement a high-touch feedback loop to refine positioning based on real buyer reactions.`,
-    evidence: [
-      {
-        source: "Company Intelligence Profile",
-        insight: `${companyIntel.name} has a clear speed and agility advantage over legacy category players.`,
-      },
-      {
-        source: "Competitive Positioning Analysis",
-        insight: "Incumbents suffer from bloated UX and slow support, creating high vulnerability to agile challengers.",
-      },
-      {
-        source: "Market Dynamics Analysis",
-        insight: "Buyers increasingly favor transparent, self-serve evaluation over drawn-out enterprise sales cycles.",
-      },
-    ],
+    answer: responseText,
+    evidence: evidenceList.length > 0 ? evidenceList : undefined,
+    sources: sourcesList.length > 0 ? sourcesList : undefined,
     confidence: "high",
-    followUpQuestions: [
-      "Which specific marketing channel should we test first this week?",
-      "How should we position our pricing against legacy incumbents?",
-      "What is the most effective teardown topic to attract our ideal customers?",
-    ],
+    followUpQuestions: followUps.length > 0 ? followUps : undefined,
+    queryIntent: intent,
     generatedAt: new Date().toISOString(),
+    researchStatus: researchStatus || (researchResults && researchResults.length > 0 ? "success" : "unconfigured"),
   };
 }
 
@@ -460,43 +551,115 @@ export async function generateDiagnosis(
 }
 
 /**
- * Answer a strategic question using stored intelligence.
+ * Answer a strategic question using stored intelligence, conversation history, and real-time Tavily research.
  */
 export async function answerQuestion(
   question: string,
   companyIntel: CompanyIntelligence,
   competitorIntel: CompetitorIntelligence[],
   marketIntel: MarketIntelligence,
-  diagnosis: StrategicDiagnosis
+  diagnosis: StrategicDiagnosis,
+  researchResults?: TavilySearchResult[],
+  researchStatus?: "success" | "no_results" | "failed" | "unconfigured",
+  history: ChatMessage[] = [],
+  conversationSummary?: string,
+  analysis?: QueryAnalysis
 ): Promise<StrategicAnswer> {
   const model = getModel();
 
+  const formattedSources: ResearchSource[] = (researchResults || []).map((r) => ({
+    title: r.title,
+    url: r.url,
+    source: r.source,
+    score: r.score,
+    publishedDate: r.publishedDate,
+  }));
+
+  const researchSummaryText = (researchResults || [])
+    .map(
+      (r, i) =>
+        `[Source ${i + 1}]
+Title: ${r.title}
+URL: ${r.url}
+Domain: ${r.source}
+Published: ${r.publishedDate || "Unknown"}
+Relevance Score: ${r.score}
+Content: ${r.content}`
+    )
+    .join("\n\n---\n\n");
+
   if (!model) {
-    console.log(`[Gemini] GEMINI_API_KEY not configured — answering with demo strategic logic: "${question}"`);
-    return getMockStrategicAnswer(question, companyIntel);
+    console.warn("[GEMINI] GEMINI_API_KEY not configured — synthesizing answer with conversational fallback");
+    return getMockStrategicAnswer(
+      question,
+      companyIntel,
+      researchResults,
+      researchStatus,
+      history,
+      analysis
+    );
   }
 
   try {
-    const prompt = buildQuestionAnswerPrompt(
+    const sourceCount = researchResults?.length || 0;
+    if (sourceCount > 0) {
+      console.log(`[GEMINI] Research context received (${sourceCount} sources from Tavily)`);
+    }
+    console.log(`[GEMINI] Generating answer for: "${question.substring(0, 60)}..." (Intent: ${analysis?.intent || "general"})`);
+
+    const prompt = buildConversationalAdvisorPrompt({
       question,
-      JSON.stringify(companyIntel, null, 2),
-      JSON.stringify(competitorIntel, null, 2),
-      JSON.stringify(marketIntel, null, 2),
-      JSON.stringify(diagnosis, null, 2)
-    );
-    console.log(`[Gemini] Answering question via API: "${question.substring(0, 60)}..."`);
+      companyIntel,
+      competitorIntel,
+      marketIntel,
+      diagnosis,
+      history,
+      conversationSummary,
+      researchText: researchSummaryText,
+      researchStatus,
+      intentGuidance: analysis?.guidance,
+      resolvedReference: analysis?.resolvedReference,
+    });
+
     const result = await model.generateContent(prompt);
     const text = result.response.text();
     const parsed = parseJsonResponse<StrategicAnswer>(text);
 
+    console.log("[GEMINI] Answer generated successfully");
+
+    // Only attach sources if there was web research cited
+    const finalSources =
+      parsed.sources && parsed.sources.length > 0
+        ? parsed.sources
+        : formattedSources.length > 0 && parsed.evidence && parsed.evidence.some((e) => e.url)
+        ? formattedSources
+        : undefined;
+
+    // Filter empty evidence arrays so conversational replies don't have empty evidence sections
+    const finalEvidence =
+      parsed.evidence && parsed.evidence.length > 0
+        ? parsed.evidence.filter((e) => e.insight && e.insight.trim().length > 0)
+        : undefined;
+
     return {
       ...parsed,
       question,
+      evidence: finalEvidence && finalEvidence.length > 0 ? finalEvidence : undefined,
+      sources: finalSources,
+      researchStatus: researchStatus || (researchResults && researchResults.length > 0 ? "success" : "unconfigured"),
+      queryIntent: analysis?.intent,
       generatedAt: new Date().toISOString(),
     };
   } catch (err) {
-    console.warn("[Gemini] answerQuestion API error, falling back to demo response:", err);
-    return getMockStrategicAnswer(question, companyIntel);
+    console.warn("[GEMINI] answerQuestion API error, falling back to conversational response:", err);
+    return getMockStrategicAnswer(
+      question,
+      companyIntel,
+      researchResults,
+      researchStatus,
+      history,
+      analysis
+    );
   }
 }
 

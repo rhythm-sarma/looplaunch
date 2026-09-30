@@ -6,7 +6,7 @@
  * Raw evidence comes from crawling and research — Gemini organizes and interprets it.
  */
 
-import type { OnboardingInput } from "../intelligence/types";
+import type { OnboardingInput, ChatMessage } from "../intelligence/types";
 
 // ──────────────────────────────────────────────
 // Company Intelligence Prompt
@@ -225,62 +225,180 @@ RULES:
 // Strategic Question-Answering Prompt
 // ──────────────────────────────────────────────
 
+export interface ConversationalPromptOptions {
+  question: string;
+  companyIntel: any;
+  competitorIntel: any[];
+  marketIntel: any;
+  diagnosis: any;
+  history?: ChatMessage[];
+  conversationSummary?: string;
+  researchText?: string;
+  researchStatus?: string;
+  intentGuidance?: string;
+  resolvedReference?: string;
+}
+
+/**
+ * Intelligent Conversational Strategy Advisor Prompt
+ *
+ * Produces continuous, context-aware dialogue that connects every new question
+ * with preceding discussion, company intelligence, and optional web research.
+ */
+export function buildConversationalAdvisorPrompt(options: ConversationalPromptOptions): string {
+  const {
+    question,
+    companyIntel,
+    competitorIntel,
+    marketIntel,
+    diagnosis,
+    history = [],
+    conversationSummary,
+    researchText,
+    researchStatus,
+    intentGuidance,
+    resolvedReference,
+  } = options;
+
+  // Format recent conversation history (last 8 messages)
+  const recentHistory = history.slice(-8);
+  const historyText = recentHistory.length > 0
+    ? recentHistory
+        .map((m) => `${m.role === "user" ? "CLIENT" : "STRATEGY ADVISOR"}:\n${m.content.trim()}`)
+        .join("\n\n---\n\n")
+    : "No previous conversation in this session yet. This is the client's first question.";
+
+  // Optional summary of older messages
+  const summaryBlock = conversationSummary
+    ? `═══ PREVIOUS DISCUSSION SUMMARY ═══\n${conversationSummary}\n\n`
+    : "";
+
+  // Web research section (only if available)
+  const webResearchSection = researchText?.trim()
+    ? `═══ REAL-TIME WEB RESEARCH (via Tavily Search) ═══
+Status: ${researchStatus || "success"}
+${researchText}
+`
+    : "";
+
+  // Reference note
+  const referenceNote = resolvedReference
+    ? `\n[Contextual Reference Note: The user's query refers to: ${resolvedReference}]\n`
+    : "";
+
+  // Intent guidance
+  const intentNote = intentGuidance
+    ? `\n[Advisory Directive: ${intentGuidance}]\n`
+    : "";
+
+  return `You are the Chief Strategy Officer and Lead Marketing Advisor at Loop Launch. You are in an ONGOING, collaborative strategic advisory conversation with the company founder/executive.
+
+${summaryBlock}═══ CONVERSATION HISTORY (Previous turns in this session) ═══
+${historyText}
+
+${webResearchSection}
+═══ AUTHORITATIVE COMPANY INTELLIGENCE BASE ═══
+Company: ${companyIntel.name} (${companyIntel.website || "N/A"})
+Core Focus: ${companyIntel.description}
+Value Proposition: ${companyIntel.valueProposition}
+Target Segments: ${companyIntel.targetSegments?.join("; ") || "B2B Operators"}
+Strengths: ${companyIntel.strengths?.join("; ") || "Speed and agility"}
+Weaknesses: ${companyIntel.weaknesses?.join("; ") || "Emerging brand awareness"}
+Current Channels: ${companyIntel.currentChannels?.join(", ") || "Direct, organic"}
+Known Competitors: ${competitorIntel?.map((c: any) => c.name).join(", ") || "Industry incumbents"}
+Core Positioning Gap: ${diagnosis?.positioning?.gap || "Focusing on features over business outcomes"}
+Key Strategic Bottleneck: ${diagnosis?.keyInsights?.[0] || "Acquisition velocity and competitive differentiation"}
+
+═══ CURRENT CLIENT QUESTION ═══
+"${question}"
+${referenceNote}${intentNote}
+═══ CONVERSATIONAL RULES ═══
+1. **CONTINUITY IS MANDATORY**:
+   - Understand the current question in relation to the conversation history above.
+   - If the user asks "Why?", explain the causal mechanism behind the statement you made in the previous message.
+   - If the user asks "How do we fix it?", provide concrete operational steps for the specific problem discussed above.
+   - If the user refers to "the second one" or "that option", look at the previous turn and address that exact entity.
+   - If the user tests a pivot ("What if we target SMBs instead?"), re-evaluate the strategy under that scenario and contrast it with previous points.
+   - NEVER repeat your prior answers. Build forward.
+
+2. **CONCISE & DIRECT BY DEFAULT**:
+   - DO NOT generate a 500-word boilerplate consulting report.
+   - Answer the actual question that was asked. A simple question deserves a crisp, 1-3 paragraph answer or focused bullets.
+   - Use natural transitions ("The catch is...", "That changes the economics.", "Looking at your customer acquisition cost...", "The underlying reason is...").
+   - Avoid generic intros like "Based on the available intelligence..." or "In conclusion...". Jump straight to the insight.
+
+3. **SELECTIVE EVIDENCE**:
+   - Only include the "evidence" array when you make specific factual claims that benefit from verification (e.g. market share percentages, competitor pricing, customer behavior data).
+   - For logical follow-ups ("Why?", "What if?", "Give me 3 ideas"), leave evidence empty or omit it. Do not force fake evidence blocks on conversational thoughts.
+
+4. **OUTPUT FORMAT (Strict JSON)**:
+Return a valid JSON object matching this schema:
+{
+  "answer": "Your direct, context-aware strategic response formatted in clean markdown (paragraphs, bold text, or lists).",
+  "evidence": [
+    // Include ONLY if specific factual data points were cited. Otherwise leave empty [].
+    {
+      "source": "Domain or source name",
+      "insight": "Specific fact or data point",
+      "url": "https://... (EXACT Tavily URL if web research was used, otherwise omit)"
+    }
+  ],
+  "sources": [
+    // Include ONLY if Tavily web research was conducted and cited. Otherwise leave empty [].
+    {
+      "title": "Page title",
+      "url": "The exact URL",
+      "source": "Domain"
+    }
+  ],
+  "confidence": "high",
+  "followUpQuestions": [
+    // OPTIONAL: 1-2 sharp, highly contextual next questions the founder might naturally ask next. Max 2.
+  ]
+}
+
+Return ONLY the JSON object. Do not wrap in extra markdown fences or preface text.`;
+}
+
+// ──────────────────────────────────────────────
+// Backward-compatible Strategic Question-Answering Prompt
+// ──────────────────────────────────────────────
+
 export function buildQuestionAnswerPrompt(
   question: string,
   companyIntel: string,
   competitorIntel: string,
   marketIntel: string,
-  diagnosis: string
+  diagnosis: string,
+  researchText?: string,
+  researchStatus?: string
 ): string {
-  return `You are a senior marketing strategist at Loop Launch, answering a strategic question for a client.
+  try {
+    const parsedCompany = typeof companyIntel === "string" ? JSON.parse(companyIntel) : companyIntel;
+    const parsedComp = typeof competitorIntel === "string" ? JSON.parse(competitorIntel) : competitorIntel;
+    const parsedMarket = typeof marketIntel === "string" ? JSON.parse(marketIntel) : marketIntel;
+    const parsedDiag = typeof diagnosis === "string" ? JSON.parse(diagnosis) : diagnosis;
 
-You have access to deep intelligence about the client's company, competitors, and market. Your job is to provide a RESEARCH-BACKED strategic answer — not generic advice.
-
-═══ COMPANY INTELLIGENCE ═══
-${companyIntel}
-
-═══ COMPETITOR INTELLIGENCE ═══
-${competitorIntel}
-
-═══ MARKET INTELLIGENCE ═══
-${marketIntel}
-
-═══ STRATEGIC DIAGNOSIS ═══
-${diagnosis}
-
-═══ CLIENT'S QUESTION ═══
-"${question}"
-
-═══ INSTRUCTIONS ═══
-Answer the question with a JSON object:
-
-{
-  "answer": "A clear, detailed, strategic answer (3-5 paragraphs). Reference specific evidence from the intelligence. Be direct and actionable.",
-  "evidence": [
-    {
-      "source": "company_intelligence | competitor_intelligence | market_intelligence | diagnosis",
-      "insight": "The specific piece of evidence supporting this part of the answer"
-    }
-  ],
-  "confidence": "high | medium | low",
-  "followUpQuestions": [
-    "A natural follow-up question the client might want to explore",
-    "Another follow-up question"
-  ]
+    return buildConversationalAdvisorPrompt({
+      question,
+      companyIntel: parsedCompany,
+      competitorIntel: parsedComp,
+      marketIntel: parsedMarket,
+      diagnosis: parsedDiag,
+      researchText,
+      researchStatus,
+    });
+  } catch {
+    // Fallback if raw strings are passed
+    return buildConversationalAdvisorPrompt({
+      question,
+      companyIntel: { name: "Our Company", description: companyIntel },
+      competitorIntel: [],
+      marketIntel: {},
+      diagnosis: {},
+      researchText,
+      researchStatus,
+    });
+  }
 }
 
-═══ LOOP LAUNCH STRATEGIC FRAMEWORKS ═══
-When relevant, apply these proprietary frameworks:
-
-1. **POSITIONING TRIANGLE**: Product ↔ Market ↔ Message alignment
-2. **CHANNEL-FIT MATRIX**: Match channels to audience behavior + budget constraints
-3. **COMPETITIVE MOAT ANALYSIS**: Identify sustainable advantages vs. temporary ones
-4. **GROWTH LOOP MAPPING**: Identify self-reinforcing growth mechanisms
-5. **STRATEGIC TIMING**: When to act vs. when to wait based on market signals
-
-RULES:
-- NEVER give generic marketing advice. Every recommendation must cite evidence.
-- If you don't have enough intelligence to answer confidently, say so and set confidence to "low"
-- If the question is outside marketing strategy scope, redirect gracefully
-- Return ONLY the JSON object, no markdown fences or extra text`;
-}

@@ -16,8 +16,10 @@ Frontend (Onboarding) → POST /api/intelligence/gather
                         → IntelligenceStore (in-memory, keyed by session)
 
 Frontend (Q&A)        → POST /api/intelligence/ask
+                            ├── Tavily Search (real-time web research on user question)
                             ├── Retrieve stored intelligence
-                            └── Gemini (reason + answer)
+                            └── Gemini (reason + answer backed by Tavily sources)
+                        → Structured Answer with Evidence & Verified Source URLs
 ```
 
 ## API Endpoints
@@ -31,7 +33,7 @@ Frontend (Q&A)        → POST /api/intelligence/ask
 | Gemini AI | `lib/ai/gemini.ts` | ✅ Active |
 | Prompt Templates | `lib/ai/prompts.ts` | ✅ Active |
 | Website Crawler | `lib/crawler/website-crawler.ts` | ✅ Active (Crawl4AI + fetch fallback) |
-| Tavily Search | `lib/research/tavily.ts` | ⏳ Stubbed (needs API key) |
+| Tavily Search | `lib/research/tavily.ts` | ✅ Active (@tavily/core SDK) |
 | Intelligence Store | `lib/intelligence/store.ts` | ✅ In-memory (MongoDB later) |
 
 ## Environment Variables
