@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { GooeyNav, type GooeyNavItem } from "@/components/ui/GooeyNav";
 
 interface LandingNavProps {
@@ -39,12 +40,20 @@ export function LandingNav({ onGetStarted }: LandingNavProps) {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border-subtle bg-black/85 backdrop-blur-md transition-all">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6 sm:px-8">
-        {/* Brand: Clean, confident typography with zero random dots */}
+        {/* Brand: Official Loop Launch Logo */}
         <a
           href="#"
-          className="text-text-primary select-none font-medium tracking-tight text-sm sm:text-base hover:text-white transition-colors z-[52]"
+          className="flex items-center select-none z-[52] hover:opacity-90 transition-opacity"
+          aria-label="Loop Launch Home"
         >
-          LOOP LAUNCH
+          <Image
+            src="/logo.png"
+            alt="Loop Launch"
+            width={145}
+            height={48}
+            className="h-8 sm:h-9 w-auto object-contain"
+            priority
+          />
         </a>
 
         {/* Center / Right navigation: GooeyNav integration */}

@@ -10,30 +10,30 @@ interface MascotProps {
   variant?: MascotVariant;
 }
 
+/**
+ * Loop Launch Brand Logo Component
+ * Replaces old mascot with the official Loop Launch static mark/logo without animation.
+ */
 export function Mascot({
-  size = 72,
+  size = 54,
   className = "",
 }: MascotProps) {
+  // Original logo aspect ratio is approx 605 x 200 (3.025 : 1)
+  const width = Math.round(size * 3.025);
+  const height = size;
+
   return (
     <div
       className={`relative inline-flex items-center justify-center select-none ${className}`}
-      style={{ width: size, height: size }}
     >
-      {/* Hand-drawn doodle bird brand signature */}
-      <div className="relative w-full h-full animate-mascot-float flex items-center justify-center">
-        <Image
-          src="/mascot/bird.jpg"
-          alt="Loop Launch bird mascot"
-          width={size}
-          height={size}
-          className="rounded-full object-cover"
-          style={{
-            filter: "invert(1) brightness(1.2) contrast(1.1)",
-            mixBlendMode: "screen",
-          }}
-          priority
-        />
-      </div>
+      <Image
+        src="/logo.png"
+        alt="Loop Launch"
+        width={width}
+        height={height}
+        className="h-auto w-auto max-h-[80px] object-contain"
+        priority
+      />
     </div>
   );
 }

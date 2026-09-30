@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, Suspense } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowUp,
   Sparkles,
@@ -276,12 +277,14 @@ function IntelligencePageContent() {
           </Link>
           <div className="w-px h-4 bg-zinc-800" />
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md bg-zinc-800 border border-zinc-700/80 flex items-center justify-center">
-              <span className="font-bold text-[11px] text-zinc-200">LL</span>
-            </div>
-            <span className="text-xs font-semibold tracking-wide text-zinc-200">
-              Loop Launch
-            </span>
+            <Image
+              src="/logo.png"
+              alt="Loop Launch"
+              width={105}
+              height={35}
+              className="h-6 w-auto object-contain"
+              priority
+            />
             <span className="text-[11px] text-zinc-500 font-mono">/</span>
             <span className="text-xs text-zinc-400 font-medium truncate max-w-[200px]">
               {companyName}
@@ -429,8 +432,14 @@ function IntelligencePageContent() {
                       {/* Advisor badge & timestamp */}
                       <div className="flex items-center justify-between text-xs text-zinc-400">
                         <div className="flex items-center gap-2">
-                          <div className="w-5 h-5 rounded-md bg-zinc-800 border border-zinc-700/60 flex items-center justify-center">
-                            <span className="text-[10px] font-bold text-zinc-200">LL</span>
+                          <div className="w-5 h-5 rounded-md bg-zinc-800 border border-zinc-700/60 flex items-center justify-center p-0.5 overflow-hidden">
+                            <Image
+                              src="/logo-mark.png"
+                              alt="Loop Launch"
+                              width={16}
+                              height={16}
+                              className="w-3.5 h-3.5 object-contain"
+                            />
                           </div>
                           <span className="font-semibold text-zinc-300 text-xs tracking-tight">
                             Strategy Advisor

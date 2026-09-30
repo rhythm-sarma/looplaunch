@@ -12,6 +12,13 @@ export const metadata: Metadata = {
   title: "Loop Launch — AI-Powered Strategic Marketing",
   description:
     "Loop Launch helps companies understand their business, market, competitors, audience, and marketing strategy using AI.",
+  icons: {
+    icon: [
+      { url: "/icon.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    apple: "/apple-icon.png",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

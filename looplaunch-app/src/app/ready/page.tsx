@@ -6,18 +6,15 @@ import Image from "next/image";
 export default function ReadyPage() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center bg-bg-primary px-6">
-      {/* Mascot — celebrating */}
-      <div className="mb-8 animate-mascot-float">
+      {/* Brand Logo */}
+      <div className="mb-8">
         <Image
-          src="/mascot/bird.jpg"
-          alt="Loop Launch mascot celebrating"
-          width={80}
-          height={80}
-          className="rounded-full"
-          style={{
-            filter: "invert(1)",
-            mixBlendMode: "screen",
-          }}
+          src="/logo.png"
+          alt="Loop Launch"
+          width={210}
+          height={70}
+          className="h-auto w-auto max-h-[70px] object-contain"
+          priority
         />
       </div>
 
