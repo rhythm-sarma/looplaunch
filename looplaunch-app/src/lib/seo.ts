@@ -3,7 +3,7 @@
  */
 
 // Fallback to production domain if NEXT_PUBLIC_SITE_URL is not set
-const DEFAULT_SITE_URL = "https://looplaunch.app";
+const DEFAULT_SITE_URL = "https://looplaunch.co";
 
 export function getSiteUrl(): string {
   if (process.env.NEXT_PUBLIC_SITE_URL) {

@@ -93,7 +93,7 @@ async function crawlWithFetch(url: string): Promise<CrawledPage> {
     const response = await fetch(url, {
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (compatible; LoopLaunchBot/1.0; +https://looplaunch.com)",
+          "Mozilla/5.0 (compatible; LoopLaunchBot/1.0; +https://looplaunch.co)",
         Accept: "text/html,application/xhtml+xml",
       },
       redirect: "follow",

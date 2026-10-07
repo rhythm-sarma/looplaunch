@@ -94,7 +94,7 @@ function getMockCompanyIntelligence(
 
   return {
     name,
-    website: onboarding.website || "https://looplaunch.app",
+    website: onboarding.website || "https://looplaunch.co",
     industry: "B2B Software / AI Intelligence",
     description: `${name} builds ${sell}. Tailored to solve critical bottlenecks in ${pain}.`,
     valueProposition: `Accelerating growth and efficiency with high-leverage tooling built for ${sell}.`,
