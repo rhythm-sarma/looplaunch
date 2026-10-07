@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import { getSiteUrl } from "@/lib/seo";
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = getSiteUrl();
+  const baseUrl = getSiteUrl().replace(/\/+$/, "");
 
   return {
     rules: [
