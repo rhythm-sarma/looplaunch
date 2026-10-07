@@ -39,11 +39,11 @@ export async function POST(request: Request) {
     console.log(`[PIPELINE] Question: "${question}"`);
 
     // Get session (or fallback test session if testing directly)
-    let session = getSession(sessionId);
+    let session = await getSession(sessionId);
 
     if (!session && (sessionId === "test" || sessionId.startsWith("test_"))) {
       console.log(`[PIPELINE] Using demo test session context for sessionId: "${sessionId}"`);
-      session = getSession("test"); // Trigger createTestSession
+      session = await getSession("test"); // Trigger createTestSession
     }
 
     if (!session) {
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
       content: question,
       timestamp: new Date().toISOString(),
     };
-    addMessageToSession(sessionId, userMessage);
+    await addMessageToSession(sessionId, userMessage);
 
     // ─── STEP 2: Query Understanding & Intent Classification ───
     const analysis = analyzeUserQuery(
@@ -140,7 +140,7 @@ export async function POST(request: Request) {
       queryIntent: analysis.intent,
       researchStatus: answer.researchStatus,
     };
-    addMessageToSession(sessionId, assistantMessage);
+    await addMessageToSession(sessionId, assistantMessage);
 
     console.log(`[PIPELINE] Conversational answer saved for session: ${sessionId}\n`);
 

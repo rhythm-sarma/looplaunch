@@ -1,44 +1,61 @@
 /**
- * Intelligence Store — In-memory session-keyed storage.
+ * Intelligence Store — MongoDB Atlas persistent storage with in-memory caching.
  *
  * "Research Once, Answer Many Times"
  *
- * This is a simple in-memory store for the MVP.
- * Will be replaced with MongoDB tomorrow.
- * Sessions auto-expire after 24 hours.
+ * Persists all onboarding intelligence, SWOT diagnosis, market research,
+ * and chat history to MongoDB Atlas (sessions collection).
+ * Falls back gracefully to in-memory cache if MongoDB is offline.
  */
 
 import type { IntelligenceSession, PipelineStatus, ChatMessage } from "./types";
+import { getDatabase } from "@/lib/db/mongodb";
 
 // ──────────────────────────────────────────────
 // Constants
 // ──────────────────────────────────────────────
 
-const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const SESSIONS_COLLECTION = "sessions";
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours in-memory TTL
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
 // ──────────────────────────────────────────────
-// In-Memory Store (global singleton)
+// In-Memory Cache (global singleton for fast reads & HMR survival)
 // ──────────────────────────────────────────────
 
-// Using globalThis to survive Next.js hot reloads in dev
 const globalStore = globalThis as unknown as {
   __intelligenceStore?: Map<string, IntelligenceSession>;
   __cleanupTimer?: ReturnType<typeof setInterval>;
+  __dbIndexesCreated?: boolean;
 };
 
-function getStore(): Map<string, IntelligenceSession> {
+function getMemoryStore(): Map<string, IntelligenceSession> {
   if (!globalStore.__intelligenceStore) {
     globalStore.__intelligenceStore = new Map();
 
-    // Start periodic cleanup
     if (!globalStore.__cleanupTimer) {
       globalStore.__cleanupTimer = setInterval(() => {
-        cleanupExpired();
+        cleanupExpiredMemory();
       }, CLEANUP_INTERVAL_MS);
     }
   }
   return globalStore.__intelligenceStore;
+}
+
+/**
+ * Lazily initialize MongoDB collection indexes.
+ */
+async function ensureDbIndexes(): Promise<void> {
+  if (globalStore.__dbIndexesCreated) return;
+  try {
+    const db = await getDatabase();
+    const collection = db.collection(SESSIONS_COLLECTION);
+    await collection.createIndex({ id: 1 }, { unique: true });
+    await collection.createIndex({ updatedAt: -1 });
+    globalStore.__dbIndexesCreated = true;
+  } catch (error) {
+    console.warn("[MongoDB Store] Index initialization notice:", error);
+  }
 }
 
 // ──────────────────────────────────────────────
@@ -57,10 +74,10 @@ export function generateSessionId(): string {
 /**
  * Create a new intelligence session.
  */
-export function createSession(
+export async function createSession(
   input: IntelligenceSession["onboardingInput"]
-): IntelligenceSession {
-  const store = getStore();
+): Promise<IntelligenceSession> {
+  const memory = getMemoryStore();
   const session: IntelligenceSession = {
     id: generateSessionId(),
     status: "idle",
@@ -70,7 +87,20 @@ export function createSession(
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
-  store.set(session.id, session);
+
+  // Cache in-memory
+  memory.set(session.id, session);
+
+  // Persist to MongoDB
+  try {
+    await ensureDbIndexes();
+    const db = await getDatabase();
+    await db.collection<IntelligenceSession>(SESSIONS_COLLECTION).insertOne({ ...session });
+    console.log(`[MongoDB Store] Created session ${session.id} in MongoDB Atlas.`);
+  } catch (error) {
+    console.warn(`[MongoDB Store] Failed to persist new session ${session.id} to MongoDB (in-memory preserved):`, error);
+  }
+
   return session;
 }
 
@@ -171,25 +201,44 @@ function createTestSession(id: string): IntelligenceSession {
 }
 
 /**
- * Get a session by ID.
+ * Get a session by ID (checks memory first, falls back to MongoDB).
  */
-export function getSession(
+export async function getSession(
   sessionId: string
-): IntelligenceSession | undefined {
-  const store = getStore();
-  let session = store.get(sessionId);
+): Promise<IntelligenceSession | undefined> {
+  const memory = getMemoryStore();
+  let session = memory.get(sessionId);
 
+  // If not in memory, query MongoDB Atlas
+  if (!session) {
+    try {
+      const db = await getDatabase();
+      const doc = await db.collection(SESSIONS_COLLECTION).findOne({ id: sessionId });
+      if (doc) {
+        // Strip MongoDB's _id when loading into IntelligenceSession
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { _id, ...rest } = doc;
+        session = rest as unknown as IntelligenceSession;
+        memory.set(sessionId, session);
+        console.log(`[MongoDB Store] Hydrated session ${sessionId} from MongoDB Atlas.`);
+      }
+    } catch (error) {
+      console.warn(`[MongoDB Store] Error querying session ${sessionId} from MongoDB:`, error);
+    }
+  }
+
+  // Handle demo / test session
   if (!session && (sessionId === "test" || sessionId.startsWith("test_") || sessionId === "demo")) {
     session = createTestSession(sessionId);
-    store.set(sessionId, session);
+    memory.set(sessionId, session);
   }
 
   if (!session) return undefined;
 
-  // Check TTL
+  // Check in-memory TTL
   const age = Date.now() - new Date(session.createdAt).getTime();
   if (age > SESSION_TTL_MS) {
-    store.delete(sessionId);
+    memory.delete(sessionId);
     return undefined;
   }
 
@@ -199,11 +248,11 @@ export function getSession(
 /**
  * Append a message to the session's persistent conversation history.
  */
-export function addMessageToSession(
+export async function addMessageToSession(
   sessionId: string,
   message: ChatMessage
-): ChatMessage[] {
-  const session = getSession(sessionId);
+): Promise<ChatMessage[]> {
+  const session = await getSession(sessionId);
   if (!session) return [];
 
   if (!session.messages) {
@@ -212,42 +261,76 @@ export function addMessageToSession(
 
   session.messages.push(message);
   session.updatedAt = new Date().toISOString();
-  getStore().set(sessionId, session);
+  getMemoryStore().set(sessionId, session);
+
+    // Persist to MongoDB
+    try {
+      const db = await getDatabase();
+      await db.collection<IntelligenceSession>(SESSIONS_COLLECTION).updateOne(
+        { id: sessionId },
+        {
+          $push: { messages: message },
+          $set: { updatedAt: session.updatedAt },
+        }
+      );
+    } catch (error) {
+    console.warn(`[MongoDB Store] Error persisting message to session ${sessionId}:`, error);
+  }
+
   return session.messages;
 }
 
 /**
  * Get the full conversation history for a session.
  */
-export function getSessionMessages(sessionId: string): ChatMessage[] {
-  const session = getSession(sessionId);
+export async function getSessionMessages(sessionId: string): Promise<ChatMessage[]> {
+  const session = await getSession(sessionId);
   return session?.messages || [];
 }
 
 /**
  * Update rolling conversation summary for long conversations.
  */
-export function updateConversationSummary(
+export async function updateConversationSummary(
   sessionId: string,
   summary: string
-): void {
-  const session = getSession(sessionId);
+): Promise<void> {
+  const session = await getSession(sessionId);
   if (session) {
     session.conversationSummary = summary;
     session.updatedAt = new Date().toISOString();
-    getStore().set(sessionId, session);
+    getMemoryStore().set(sessionId, session);
+
+    try {
+      const db = await getDatabase();
+      await db.collection(SESSIONS_COLLECTION).updateOne(
+        { id: sessionId },
+        {
+          $set: {
+            conversationSummary: summary,
+            updatedAt: session.updatedAt,
+          },
+        }
+      );
+    } catch (error) {
+      console.warn(`[MongoDB Store] Error updating summary for ${sessionId}:`, error);
+    }
   }
 }
 
 /**
  * Update a session's status and optional fields.
  */
-export function updateSession(
+export async function updateSession(
   sessionId: string,
   updates: Partial<Omit<IntelligenceSession, "id" | "createdAt">>
-): IntelligenceSession | undefined {
-  const store = getStore();
-  const session = store.get(sessionId);
+): Promise<IntelligenceSession | undefined> {
+  const memory = getMemoryStore();
+  let session = memory.get(sessionId);
+
+  if (!session) {
+    session = await getSession(sessionId);
+  }
   if (!session) return undefined;
 
   const updated: IntelligenceSession = {
@@ -255,46 +338,92 @@ export function updateSession(
     ...updates,
     updatedAt: new Date().toISOString(),
   };
-  store.set(sessionId, updated);
+
+  memory.set(sessionId, updated);
+
+  // Persist update to MongoDB
+  try {
+    const db = await getDatabase();
+    await db.collection(SESSIONS_COLLECTION).updateOne(
+      { id: sessionId },
+      {
+        $set: {
+          ...updates,
+          updatedAt: updated.updatedAt,
+        },
+      },
+      { upsert: true }
+    );
+  } catch (error) {
+    console.warn(`[MongoDB Store] Error updating session ${sessionId} in MongoDB:`, error);
+  }
+
   return updated;
 }
 
 /**
  * Update just the pipeline status with a message.
  */
-export function updateStatus(
+export async function updateStatus(
   sessionId: string,
   status: PipelineStatus,
   statusMessage: string
-): void {
-  updateSession(sessionId, { status, statusMessage });
+): Promise<void> {
+  await updateSession(sessionId, { status, statusMessage });
 }
 
 /**
  * Delete a session.
  */
-export function deleteSession(sessionId: string): boolean {
-  return getStore().delete(sessionId);
+export async function deleteSession(sessionId: string): Promise<boolean> {
+  const deletedFromMemory = getMemoryStore().delete(sessionId);
+  try {
+    const db = await getDatabase();
+    await db.collection(SESSIONS_COLLECTION).deleteOne({ id: sessionId });
+  } catch (error) {
+    console.warn(`[MongoDB Store] Error deleting session ${sessionId} from MongoDB:`, error);
+  }
+  return deletedFromMemory;
 }
 
 /**
- * List all active sessions (for debugging).
+ * List all active sessions.
  */
-export function listSessions(): IntelligenceSession[] {
-  return Array.from(getStore().values());
+export async function listSessions(): Promise<IntelligenceSession[]> {
+  try {
+    const db = await getDatabase();
+    const docs = await db
+      .collection(SESSIONS_COLLECTION)
+      .find({})
+      .sort({ updatedAt: -1 })
+      .limit(50)
+      .toArray();
+
+    if (docs && docs.length > 0) {
+      return docs.map((doc) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { _id, ...rest } = doc;
+        return rest as unknown as IntelligenceSession;
+      });
+    }
+  } catch (error) {
+    console.warn("[MongoDB Store] Error listing sessions from MongoDB:", error);
+  }
+
+  return Array.from(getMemoryStore().values());
 }
 
 // ──────────────────────────────────────────────
-// Internal Cleanup
+// Internal Cleanup (in-memory)
 // ──────────────────────────────────────────────
 
-function cleanupExpired(): void {
-  const store = getStore();
+function cleanupExpiredMemory(): void {
+  const memory = getMemoryStore();
   const now = Date.now();
-  for (const [id, session] of store.entries()) {
+  for (const [id, session] of memory.entries()) {
     const age = now - new Date(session.createdAt).getTime();
     if (age > SESSION_TTL_MS) {
-      store.delete(id);
+      memory.delete(id);
     }
   }
 }

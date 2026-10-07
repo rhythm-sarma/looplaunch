@@ -63,7 +63,7 @@ function validateInput(body: unknown): OnboardingInput | null {
 async function runPipeline(sessionId: string, input: OnboardingInput) {
   try {
     // ─── STAGE 1: Crawl Company Website ───
-    updateStatus(sessionId, "crawling_company", "Researching your website...");
+    await updateStatus(sessionId, "crawling_company", "Researching your website...");
     let companyCrawl;
     try {
       companyCrawl = await crawlWebsite(input.website);
@@ -74,7 +74,7 @@ async function runPipeline(sessionId: string, input: OnboardingInput) {
     const companyText = crawlResultToText(companyCrawl);
 
     // ─── STAGE 2: Crawl Competitor Websites ───
-    updateStatus(sessionId, "crawling_competitors", "Researching your competitors...");
+    await updateStatus(sessionId, "crawling_competitors", "Researching your competitors...");
     const competitorNames = input.competitors
       .split(/[,\n]/)
       .map((c) => c.trim())
@@ -102,7 +102,7 @@ async function runPipeline(sessionId: string, input: OnboardingInput) {
     }
 
     // ─── STAGE 3: Market Research (Tavily) ───
-    updateStatus(sessionId, "researching_market", "Analyzing your market...");
+    await updateStatus(sessionId, "researching_market", "Analyzing your market...");
     let marketResearchText = "";
     let rawTavilyResults: import("@/lib/intelligence/types").TavilySearchResult[] = [];
     try {
@@ -118,12 +118,12 @@ async function runPipeline(sessionId: string, input: OnboardingInput) {
     }
 
     // ─── STAGE 4: Gemini — Analyze Company ───
-    updateStatus(sessionId, "analyzing_company", "Building company intelligence profile...");
+    await updateStatus(sessionId, "analyzing_company", "Building company intelligence profile...");
     const companyIntel = await analyzeCompany(input, companyText);
-    updateSession(sessionId, { companyIntelligence: companyIntel });
+    await updateSession(sessionId, { companyIntelligence: companyIntel });
 
     // ─── STAGE 5: Gemini — Analyze Competitors ───
-    updateStatus(sessionId, "analyzing_competitors", "Analyzing competitive landscape...");
+    await updateStatus(sessionId, "analyzing_competitors", "Analyzing competitive landscape...");
     const companyContext = `${companyIntel.name}: ${companyIntel.description}. Value prop: ${companyIntel.valueProposition}`;
     const competitorIntels = [];
     for (const comp of competitorCrawls) {
@@ -134,14 +134,14 @@ async function runPipeline(sessionId: string, input: OnboardingInput) {
         console.warn(`[Pipeline] Competitor analysis failed for ${comp.name}:`, e);
       }
     }
-    updateSession(sessionId, { competitorIntelligence: competitorIntels });
+    await updateSession(sessionId, { competitorIntelligence: competitorIntels });
 
     // ─── STAGE 6: Gemini — Analyze Market ───
     // Raw Tavily results are stored on marketIntelligence.searchResults
     // so they remain separate from Gemini's synthesized intelligence.
-    updateStatus(sessionId, "analyzing_market", "Understanding market dynamics...");
+    await updateStatus(sessionId, "analyzing_market", "Understanding market dynamics...");
     const marketIntel = await analyzeMarket(input, marketResearchText);
-    updateSession(sessionId, {
+    await updateSession(sessionId, {
       marketIntelligence: {
         ...marketIntel,
         searchResults: rawTavilyResults,
@@ -149,22 +149,22 @@ async function runPipeline(sessionId: string, input: OnboardingInput) {
     });
 
     // ─── STAGE 7: Gemini — Strategic Diagnosis ───
-    updateStatus(sessionId, "diagnosing", "Generating strategic diagnosis...");
+    await updateStatus(sessionId, "diagnosing", "Generating strategic diagnosis...");
     const diagnosis = await generateDiagnosis(
       companyIntel,
       competitorIntels,
       marketIntel,
       input
     );
-    updateSession(sessionId, { diagnosis });
+    await updateSession(sessionId, { diagnosis });
 
     // ─── DONE ───
-    updateStatus(sessionId, "ready", "Intelligence gathering complete. Ready for questions.");
+    await updateStatus(sessionId, "ready", "Intelligence gathering complete. Ready for questions.");
     console.log(`[Pipeline] Session ${sessionId} complete.`);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error(`[Pipeline] Fatal error for session ${sessionId}:`, msg);
-    updateSession(sessionId, {
+    await updateSession(sessionId, {
       status: "error",
       statusMessage: "An error occurred during intelligence gathering.",
       error: msg,
@@ -194,7 +194,7 @@ export async function POST(request: Request) {
     }
 
     // Create session and start pipeline asynchronously
-    const session = createSession(input);
+    const session = await createSession(input);
 
     // Run pipeline in background (don't await — return immediately)
     runPipeline(session.id, input).catch((e) => {

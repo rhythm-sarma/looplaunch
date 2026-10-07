@@ -98,11 +98,6 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   const canGoPrev = currentStepIndex > 0;
   const isComplete = currentStepIndex === STEPS.length - 1;
 
-  // Don't render children until hydrated to avoid flash
-  if (!hydrated) {
-    return null;
-  }
-
   return (
     <OnboardingContext.Provider
       value={{

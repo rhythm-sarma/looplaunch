@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const session = getSession(sessionId);
+  const session = await getSession(sessionId);
 
   if (!session) {
     return NextResponse.json(

@@ -34,14 +34,15 @@ Frontend (Q&A)        → POST /api/intelligence/ask
 | Prompt Templates | `lib/ai/prompts.ts` | ✅ Active |
 | Website Crawler | `lib/crawler/website-crawler.ts` | ✅ Active (Crawl4AI + fetch fallback) |
 | Tavily Search | `lib/research/tavily.ts` | ✅ Active (@tavily/core SDK) |
-| Intelligence Store | `lib/intelligence/store.ts` | ✅ In-memory (MongoDB later) |
+| Intelligence Store | `lib/intelligence/store.ts` | ✅ Active (MongoDB Atlas + In-memory cache) |
+| Database Client | `lib/db/mongodb.ts` | ✅ Active (MongoDB Atlas singleton) |
 
 ## Environment Variables
 Required in `looplaunch-app/.env.local`:
 - `GEMINI_API_KEY` — Google Gemini API key ✅
 - `CRAWL4AI_URL` — Crawl4AI service URL (never hardcoded)
 - `TAVILY_API_KEY` — Tavily API key (optional for now)
-- `MONGODB_URI` — MongoDB connection string (optional for now)
+- `MONGODB_URI` — MongoDB Atlas connection string ✅
 
 ## Key Principle
 **"Research Once, Answer Many Times"**
