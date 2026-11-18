@@ -339,17 +339,11 @@
   color: var(--nw-text);
   font-weight: 600;
 }
+/* The join button, centred under the chart */
 .nw-pb-foot {
   margin-top: 28px;
   display: flex;
-  flex-direction: column;
-  gap: 20px;
-  align-items: flex-start;
-}
-.nw-pb-foot p {
-  color: var(--nw-text-2);
-  max-width: 46ch;
-  line-height: 1.6;
+  justify-content: center;
 }
 @media (min-width: 640px) {
   /* Columns fit their question (then share the spare room), so "A marketing head?" never wraps */
@@ -362,13 +356,6 @@
   .nw-ask + .nw-ask {
     border-top: 0;
     border-left: 1px solid #7c3aed;
-  }
-}
-@media (min-width: 720px) {
-  .nw-pb-foot {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
   }
 }
 /* From 1200px each heading sits on the left: the first beside its questions, the second beside its
@@ -842,16 +829,127 @@
   }
 }
 
+/* Our Instagram carousel under the numbers: a strip that snaps slide by slide, the next one peeking in */
+.nw-slides {
+  margin-top: 8px;
+}
+.nw-slides-track {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 82%;
+  gap: 16px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  border-radius: 14px;
+}
+.nw-slides-track::-webkit-scrollbar {
+  display: none;
+}
+.nw-slide {
+  scroll-snap-align: start;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid var(--nw-line);
+  background: var(--nw-surface);
+}
+.nw-slide img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.nw-slides-bar {
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+/* Shows how far along the strip you are, like a scrollbar */
+.nw-slides-line {
+  flex: 1;
+  height: 2px;
+  margin-right: 12px;
+  border-radius: 99px;
+  background: var(--nw-line);
+  overflow: hidden;
+}
+.nw-slides-line i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #7c3aed;
+}
+.nw-slides-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 99px;
+  border: 1px solid var(--nw-line-2);
+  color: var(--nw-text);
+  transition:
+    border-color 0.2s ease,
+    opacity 0.2s ease,
+    transform 0.15s ease;
+}
+.nw-slides-btn:hover:not(:disabled) {
+  border-color: var(--nw-text-2);
+}
+.nw-slides-btn:active:not(:disabled) {
+  transform: scale(0.94);
+}
+.nw-slides-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+@media (min-width: 640px) {
+  .nw-slides-track {
+    grid-auto-columns: calc((100% - 16px) / 2.2);
+  }
+}
+@media (min-width: 1024px) {
+  .nw-slides-track {
+    grid-auto-columns: calc((100% - 32px) / 2.4);
+  }
+}
+
 /* ─── FAQ ─── */
 .nw-faq-wrap {
   max-width: calc(var(--nw-text-max) + 2 * var(--nw-pad-x));
 }
 .nw-faq {
   margin-top: 48px;
-  border-top: 1px solid var(--nw-line);
 }
-.nw-faq details {
-  border-bottom: 1px solid var(--nw-line);
+/* The rules between questions: drawn left to right as each row rises in */
+.nw-faq-item {
+  position: relative;
+}
+.nw-faq-item::after,
+.nw-faq-item:first-child::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--nw-line);
+  transform-origin: left;
+  transition: transform 1.1s var(--nw-ease) var(--d, 0ms);
+}
+.nw-faq-item::after {
+  bottom: 0;
+}
+.nw-faq-item:first-child::before {
+  top: 0;
+}
+@media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
+  .nw-faq-item:not([data-in])::after,
+  .nw-faq-item:not([data-in])::before {
+    transform: scaleX(0);
+  }
 }
 .nw-faq summary {
   list-style: none;
@@ -869,12 +967,29 @@
 .nw-faq summary::-webkit-details-marker {
   display: none;
 }
+/* The question slides a touch right on hover; the plus spins into a cross when open */
+.nw-q {
+  transition: transform 0.35s var(--nw-ease);
+}
 .nw-plus {
   position: relative;
   flex: 0 0 20px;
   width: 20px;
   height: 20px;
-  transition: transform 0.2s var(--nw-ease);
+  transition: transform 0.45s var(--nw-ease);
+}
+.nw-plus::before,
+.nw-plus::after {
+  transition: background-color 0.2s ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .nw-faq summary:hover .nw-q {
+    transform: translateX(6px);
+  }
+  .nw-faq summary:hover .nw-plus::before,
+  .nw-faq summary:hover .nw-plus::after {
+    background: var(--nw-text);
+  }
 }
 .nw-plus::before,
 .nw-plus::after {
@@ -896,19 +1011,36 @@
   margin: -10px 0 0 -0.75px;
 }
 .nw-faq details[open] .nw-plus {
-  transform: rotate(45deg);
+  transform: rotate(135deg);
 }
 .nw-ans {
   padding: 0 44px 24px 0;
   color: var(--nw-text-2);
 }
 .nw-faq details[open] .nw-ans {
-  animation: nw-ans 0.2s var(--nw-ease);
+  animation: nw-ans 0.5s var(--nw-ease) 0.06s both;
 }
 @keyframes nw-ans {
   from {
     opacity: 0;
-    transform: translateY(-6px);
+    transform: translateY(-10px);
+  }
+}
+/* The answer opens and closes smoothly, and the one closing beside it folds away at the same time.
+   Browsers without ::details-content or size interpolation simply open it at once. */
+@supports selector(::details-content) {
+  .nw-faq details {
+    interpolate-size: allow-keywords;
+  }
+  .nw-faq details::details-content {
+    block-size: 0;
+    overflow-y: clip;
+    transition:
+      block-size 0.5s var(--nw-ease),
+      content-visibility 0.5s allow-discrete;
+  }
+  .nw-faq details[open]::details-content {
+    block-size: auto;
   }
 }
 
@@ -1109,7 +1241,11 @@
     stroke-dashoffset: 0;
   }
   .nw-card:hover,
-  .nw-btn:active {
+  .nw-btn:active,
+  .nw-faq summary:hover .nw-q {
     transform: none;
+  }
+  .nw-faq details::details-content {
+    transition: none;
   }
 }

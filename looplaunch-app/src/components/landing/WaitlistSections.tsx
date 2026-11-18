@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Mail } from "lucide-react";
+import { ArrowLeft, ArrowRight, Mail } from "lucide-react";
+import { INSTAGRAM_URL, InstagramIcon } from "@/components/brand/Instagram";
 import { useWaitlistGame } from "@/components/waitlist/WaitlistGame";
 import { siteConfig } from "@/lib/seo";
 import { smoothScrollTo } from "@/lib/smooth-scroll";
@@ -16,8 +17,6 @@ import "./waitlist-sections.css";
 const DEMO_VIDEO_URL = "/demo/loop-launch-demo.mp4";
 /** The still shown before the video plays (an .mp4 only). */
 const DEMO_POSTER = "/demo/loop-launch-demo-poster.jpg";
-
-const INSTAGRAM_URL = "https://www.instagram.com/looplaunch.in/";
 
 /** Delay for the landing page's scroll reveal (landing.css), to stagger a group. */
 const delay = (ms: number) => ({ "--d": `${ms}ms` }) as CSSProperties;
@@ -81,16 +80,16 @@ export function WaitlistSections() {
 
 /* ─── The problem, with numbers ─── */
 
-/* Anayana's list (founder), as the team edited it: "stand out from competitors" right after the action
-   plan, at 60%; the audience and channels rows swapped for two rows from the old Constant Contact card. */
+/* Anayana's list (founder), as the team edited it: the strategy row first, "stand out from competitors"
+   at 60%, then the action plan; the audience and channels rows swapped for two rows from the old Constant
+   Contact card; her first row ("Not sure our strategy is working") dropped, since the strategy row says the same. */
 const SAID = [
-  { label: "Not sure our strategy is working", value: 73, ours: true },
-  { label: "No clear marketing action plan", value: 67, ours: true },
-  { label: "Struggle to stand out from competitors", value: 60, ours: true },
   { label: "Aren’t sure their marketing strategy is working", value: 73, ours: true },
+  { label: "Struggle to stand out from competitors", value: 60, ours: true },
+  { label: "No clear marketing action plan", value: 67, ours: true },
   { label: "Routinely put off marketing", value: 52, ours: true },
   { label: "Struggle to come up with post ideas", value: 37, ours: true },
-  { label: "Can’t tell what’s working", value: 33 },
+  { label: "Can’t tell what’s working, blindly following trends", value: 33, ours: true },
   { label: "Need to know what to do next", value: 27, ours: true },
 ];
 
@@ -148,11 +147,16 @@ function ProblemSection() {
             <h2 className="nw-h2 nw-pb-h nw-pb-h-split">
               <span>The problem isn’t effort.</span> <span>It’s direction.</span>
             </h2>
+            <p className="nw-pb-line">
+              Most founders don’t fail at marketing because they’re lazy, they fail because they only have 45 minutes a day
+              and zero roadmap. Loop Launch turns that 1 hour into an exact 7-day execution sprint.
+            </p>
           </div>
           <div className="nw-pb-side">
             <figure ref={chartRef} className={`nw-stat-card${grown ? " nw-go" : ""}`} data-reveal>
               <figcaption>
-                <h3 className="nw-sc-t">What 7,000+ small businesses said about their marketing</h3>
+                <h3 className="nw-sc-t">You aren’t the only one stuck here .</h3>
+                <h3 className="nw-sc-t">(7,000+ founders agree)</h3>
                 <p className="nw-sc-s nw-sc-lead">
                   <span>It’s not an execution problem.</span> <strong>It’s a decision problem.</strong>
                 </p>
@@ -160,7 +164,6 @@ function ProblemSection() {
               <Bars rows={SAID} />
             </figure>
             <div className="nw-pb-foot" data-reveal>
-              <p>Loopy works on the purple bars: strategy, a plan for the week, competition and what to post.</p>
               <JoinButton />
             </div>
           </div>
@@ -595,7 +598,7 @@ function CredSection() {
           </div>
           <div className="nw-stat" data-reveal style={delay(160)}>
             <dt className="nw-statnum">
-              <Counter to={5} />M
+              <Counter to={5} />M+
             </dt>
             <dd className="nw-small nw-muted">organic views in the first 60 days</dd>
           </div>
@@ -604,9 +607,137 @@ function CredSection() {
             <dd className="nw-small nw-muted">across India, UAE, Singapore, Vietnam, Australia, the US, the UK and Europe</dd>
           </div>
         </dl>
-      
+        <ByHandSlides />
       </div>
     </section>
+  );
+}
+
+/** Our Instagram carousel (@looplaunch.in), one slide each; the text is the slide's words for screen readers. */
+const BY_HAND_SLIDES = [
+  "1.8 years of Loop Launch: a little unhinged, fully real. With a thank-you message from a founder we worked with. #loopcrew",
+  "Why we started: there was a gap between how people think marketing works and how it should actually be done. So one crazy head found a team of crazy heads. We never did “this is how it’s done”. We stayed raw and chill, and that’s exactly what our founders loved.",
+  "Month 1: everyone scared us that the first month is where you burn the most. We had everything set; loss wasn’t even a word we’d consider. 68–71% net profit from month one.",
+  "60 days in: 5 million organic views in our first 60 days, while the algorithm was being a full-time nuisance.",
+  "How we actually did it: built a community for every brand, brought in loyal customers, not just followers, went all in on organic reach first, and only the posts that won organically got ads. Result: leads up 2.3x to 2.5x.",
+  "Where it worked best: food & beverage, clothing, e-commerce, education and travel, plus tech and SaaS along the way. 23+ industries and their sub-categories. Our weirdest? A semiconductor simulator class on YouTube that needed the world to care about chips. We made it happen.",
+  "We went global: for 3 months, to consulting, and founders found us from everywhere: India, UAE, Singapore, Vietnam, Australia, the US, the UK and Europe. 43+ founders, still connected and thriving.",
+  "The team: fully remote. In the early days people ghosted us; some vanished in the middle of client meetings. Then the right ones stayed, and that core team held everything up. P.S. Our founder won the Youth Icon Award in 2026.",
+  "What’s next: everything we learned is now becoming a product. Loop Launch, your virtual CMO. It reads your brand and tells you what to stop, what to start, and what to do this week. Waitlist opening soon.",
+];
+const SLIDE_EVERY_MS = 4000;
+
+/** One slide plus the gap after it: how far a single step moves the strip. */
+function slideStep(track: HTMLElement) {
+  const first = track.firstElementChild as HTMLElement | null;
+  return first ? first.offsetWidth + (parseFloat(getComputedStyle(track).columnGap) || 0) : 0;
+}
+
+/**
+ * A strip of the slides that moves one slide every few seconds while it's on screen, and waits while
+ * the pointer or focus is on it. Swipe, scroll or the arrows to move it yourself; after that it stays put.
+ */
+function ByHandSlides() {
+  const trackRef = useRef<HTMLUListElement>(null);
+  const hold = useRef(false);
+  const [auto, setAuto] = useState(true);
+  const [at, setAt] = useState({ start: true, end: false, thumb: 1, p: 0 });
+
+  // Where the strip is: drives the arrows and the scroll line under it
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    let raf = 0;
+    const read = () => {
+      raf = 0;
+      const max = track.scrollWidth - track.clientWidth;
+      const x = track.scrollLeft;
+      setAt({ start: x <= 2, end: x >= max - 2, thumb: track.clientWidth / track.scrollWidth, p: max > 0 ? x / max : 0 });
+    };
+    const onChange = () => {
+      if (!raf) raf = requestAnimationFrame(read);
+    };
+    read();
+    track.addEventListener("scroll", onChange, { passive: true });
+    window.addEventListener("resize", onChange);
+    return () => {
+      track.removeEventListener("scroll", onChange);
+      window.removeEventListener("resize", onChange);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  // The slideshow: a step every few seconds, back to the first slide after the last
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track || !auto || stillMotion()) return;
+    let onScreen = false;
+    const io = new IntersectionObserver(([entry]) => (onScreen = entry.isIntersecting), { threshold: 0.5 });
+    io.observe(track);
+    const timer = window.setInterval(() => {
+      if (!onScreen || hold.current || document.hidden) return;
+      const atEnd = track.scrollLeft >= track.scrollWidth - track.clientWidth - 2;
+      if (atEnd) track.scrollTo({ left: 0, behavior: "smooth" });
+      else track.scrollBy({ left: slideStep(track), behavior: "smooth" });
+    }, SLIDE_EVERY_MS);
+    return () => {
+      io.disconnect();
+      window.clearInterval(timer);
+    };
+  }, [auto]);
+
+  const step = (dir: 1 | -1) => {
+    const track = trackRef.current;
+    if (!track) return;
+    setAuto(false);
+    track.scrollBy({ left: dir * slideStep(track), behavior: stillMotion() ? "auto" : "smooth" });
+  };
+
+  return (
+    <div className="nw-slides" data-reveal>
+      <ul
+        ref={trackRef}
+        className="nw-slides-track"
+        aria-label="Our story so far, from our Instagram"
+        tabIndex={0}
+        onPointerDown={() => setAuto(false)}
+        onWheel={(e) => {
+          if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) setAuto(false);
+        }}
+        onMouseEnter={() => (hold.current = true)}
+        onMouseLeave={() => (hold.current = false)}
+        onFocus={() => (hold.current = true)}
+        onBlur={() => (hold.current = false)}
+      >
+        {BY_HAND_SLIDES.map((words, i) => (
+          <li key={i} className="nw-slide">
+            <Image
+              src={`/by-hand/${String(i + 1).padStart(2, "0")}.webp`}
+              alt={`Slide ${i + 1} of ${BY_HAND_SLIDES.length}. ${words}`}
+              width={960}
+              height={1280}
+              sizes="(min-width: 1280px) 500px, (min-width: 1024px) 40vw, (min-width: 640px) 46vw, 82vw"
+            />
+          </li>
+        ))}
+      </ul>
+      <div className="nw-slides-bar">
+        <span className="nw-slides-line" aria-hidden="true">
+          <i
+            style={{
+              width: `${at.thumb * 100}%`,
+              transform: `translateX(${at.thumb < 1 ? at.p * (1 / at.thumb - 1) * 100 : 0}%)`,
+            }}
+          />
+        </span>
+        <button type="button" className="nw-slides-btn" aria-label="Previous slide" disabled={at.start} onClick={() => step(-1)}>
+          <ArrowLeft size={18} aria-hidden="true" />
+        </button>
+        <button type="button" className="nw-slides-btn" aria-label="Next slide" disabled={at.end} onClick={() => step(1)}>
+          <ArrowRight size={18} aria-hidden="true" />
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -647,17 +778,20 @@ function FaqSection() {
         <h2 className="nw-h2" id="faq-h" data-reveal>
           FAQ
         </h2>
-        <div className="nw-faq" data-reveal>
-          {FAQS.map(([q, a]) => (
-            <details key={q} name="nw-faq">
-              <summary>
-                {q}
-                <span className="nw-plus" aria-hidden="true" />
-              </summary>
-              <div className="nw-ans">
-                <p>{a}</p>
-              </div>
-            </details>
+        {/* Each question rises in turn as it scrolls in, and its rule draws across under it */}
+        <div className="nw-faq">
+          {FAQS.map(([q, a], i) => (
+            <div key={q} className="nw-faq-item" data-reveal style={delay(i * 70)}>
+              <details name="nw-faq">
+                <summary>
+                  <span className="nw-q">{q}</span>
+                  <span className="nw-plus" aria-hidden="true" />
+                </summary>
+                <div className="nw-ans">
+                  <p>{a}</p>
+                </div>
+              </details>
+            </div>
           ))}
         </div>
       </div>
@@ -721,27 +855,6 @@ function CtaSection() {
   );
 }
 
-/** Lucide dropped its brand icons, so Instagram is drawn here in the same 24px stroke style. */
-function InstagramIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width={20}
-      height={20}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <rect x="2" y="2" width="20" height="20" rx="5" />
-      <circle cx="12" cy="12" r="4" />
-      <path d="M17.5 6.5h.01" />
-    </svg>
-  );
-}
-
 /* ─── Footer ─── */
 
 /** The waitlist page's footer. Log in stays here for the team, since the nav has none while invite-only. */
@@ -753,7 +866,7 @@ export function WaitlistFooter() {
         <div className="nw-foot-row">
           <div className="nw-foot-brand">
             <Image src="/logo.png" alt="Loop Launch" width={97} height={32} />
-            <p>Your virtual CMO. The CMO you couldn’t afford.</p>
+            <p>Your virtual CMO. The brain working with you :)</p>
           </div>
           <nav className="nw-foot-links" aria-label="Footer">
             <a href="#how" onClick={(e) => jumpTo(e, "how")}>

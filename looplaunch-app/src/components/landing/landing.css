@@ -187,6 +187,23 @@
   padding: 0 18px;
   font-size: var(--t-small);
 }
+/* Instagram: a 40px tap target around the 20px icon; the negative margin keeps the visual gaps even */
+.ll-nav__ig {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  margin-inline: -10px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 99px;
+  color: var(--muted);
+  transition: color 0.2s ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .ll-nav__ig:hover {
+    color: var(--ink);
+  }
+}
 @media (max-width: 760px) {
   .ll-nav__links {
     gap: 16px;
@@ -194,11 +211,15 @@
   .ll-nav__links a {
     display: none;
   }
-  /* Log in stays on a phone: with the section links gone it's the only way back into an account */
+  /* Log in and Instagram stay on a phone: with the section links gone, Log in is the only way back into an account */
   .ll-nav__links a.ll-nav__login {
     display: inline-flex;
     min-height: 40px;
     align-items: center;
+  }
+  .ll-nav__links a.ll-nav__ig {
+    display: inline-flex;
+    margin-inline: -8px;
   }
 }
 @media (max-width: 380px) {

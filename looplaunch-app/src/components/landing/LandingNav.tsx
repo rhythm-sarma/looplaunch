@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { INSTAGRAM_URL, InstagramIcon } from "@/components/brand/Instagram";
 import { LogoMenu } from "@/components/brand/LogoMenu";
 import { smoothScrollTo } from "@/lib/smooth-scroll";
 
@@ -52,6 +53,15 @@ export function LandingNav({ onGetStarted, ctaLabel = "Get started", links = LIN
               Log in
             </Link>
           )}
+          <a
+            href={INSTAGRAM_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Loop Launch on Instagram"
+            className="ll-nav__ig"
+          >
+            <InstagramIcon />
+          </a>
           <button type="button" onClick={onGetStarted} className="ll-button">
             {ctaLabel}
           </button>
