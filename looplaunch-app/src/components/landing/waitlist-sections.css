@@ -206,8 +206,8 @@
   max-width: 14ch;
   line-height: 1.25;
 }
-/* "The problem isn't effort." / "It's direction.": one sentence per line. Where the column is narrow
-   (beside the charts from 1200px, and 320px phones) the size steps down just enough for the first to fit. */
+/* "The problem isn't effort." / "It's direction.": one sentence per line. It sits above its charts on
+   every screen, so it keeps the full heading size; the cap only guards very narrow columns. */
 .nw-pb-hwrap {
   container-type: inline-size;
 }
@@ -217,6 +217,15 @@
 }
 .nw-pb-h-split > span {
   display: block;
+}
+/* Phones: both problem headings in two lines at one shared size ("They had a team. but / no one to
+   think marketing." needs 11.1em per line), stepping down only on the narrowest phones. */
+@media (max-width: 639px) {
+  .nw-pb-h {
+    max-width: none;
+    font-size: min(var(--nw-fs-h2), 8.7cqi);
+    text-wrap: balance;
+  }
 }
 /* The brighter violet: 1px of the brand violet reads as grey on black */
 .nw-asks {
@@ -363,9 +372,10 @@
     justify-content: space-between;
   }
 }
-/* Heading beside the content only where the two charts still have room side by side */
+/* The first row's heading sits beside its questions from 1200px. The second row stays stacked, heading
+   above the charts, so "The problem isn't effort." keeps the full heading size on one line. */
 @media (min-width: 1200px) {
-  .nw-pb-row {
+  .nw-pb-row:not(.nw-pb-row2) {
     grid-template-columns: 5fr 8fr;
     gap: 64px;
   }

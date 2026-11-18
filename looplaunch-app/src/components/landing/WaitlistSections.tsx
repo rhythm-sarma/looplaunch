@@ -118,10 +118,11 @@ function ProblemSection() {
     <section className="nw-sec" id="problem" aria-labelledby="problem-h">
       <div className="nw-wrap">
         <div className="nw-pb-row">
-          <div data-reveal>
+          <div className="nw-pb-hwrap" data-reveal>
             <p className="nw-eyebrow">What founders told us</p>
+            {/* "no one" never splits, so phones read "They had a team. but / no one to think marketing." */}
             <h2 className="nw-h2 nw-pb-h" id="problem-h">
-              They had a team. but no one to think marketing.
+              They had a team. but no&nbsp;one to think marketing.
             </h2>
           </div>
           <div className="nw-pb-side">
