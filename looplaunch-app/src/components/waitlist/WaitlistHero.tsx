@@ -42,9 +42,11 @@ export function WaitlistHero() {
         density={0.8}
         className="!absolute inset-0"
       />
-      {/* Darkens the middle so the headline and form stay readable, and fades into the next section */}
+      {/* Darkens the middle so the headline and form stay readable, and fades into the next section.
+          On phones the text spans nearly the whole width and the glyphs are as big as the words, so the
+          dark patch there is wider and deeper; the glow still shows above and at the edges. */}
       <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_45%_at_50%_55%,rgba(0,0,0,0.65),transparent)]"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_115%_48%_at_50%_52%,rgba(0,0,0,0.86),rgba(0,0,0,0.6)_55%,transparent)] sm:bg-[radial-gradient(ellipse_60%_45%_at_50%_55%,rgba(0,0,0,0.65),transparent)] short:bg-[radial-gradient(ellipse_80%_50%_at_50%_45%,rgba(0,0,0,0.86),rgba(0,0,0,0.6)_55%,transparent)]"
         aria-hidden="true"
       />
       <div
@@ -61,16 +63,18 @@ export function WaitlistHero() {
         <span className="mb-6 rounded-full border border-white/15 bg-black/40 px-4 py-1.5 text-sm font-medium text-text-secondary backdrop-blur">
           Loop Launch
         </span>
-        <h1 className="text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
+        {/* Scales down on the narrowest phones so "Your Virtual CMO is" stays on one line */}
+        <h1 className="text-[clamp(1.75rem,9.2vw,2.25rem)] font-semibold leading-tight tracking-tight sm:text-6xl">
           Your Virtual CMO is
           <br />
           almost here.
         </h1>
-        {/* One clause per line from sm up, so the lines stack evenly; phones balance the wrap instead */}
+        {/* One clause per line from sm up, so the lines stack evenly; phones balance the first two and
+            keep the bold call to action on its own line */}
         <p className="mt-5 max-w-xl text-base text-balance text-text-secondary sm:text-lg">
           <span className="sm:block">It scans your business, competitors and market,</span>{" "}
           <span className="sm:block">then tells you exactly what to do this week.</span>{" "}
-          <span className="font-bold text-text-primary sm:block">Join the waitlist for early access.</span>
+          <span className="mt-1 block font-bold text-text-primary sm:mt-0">Join the waitlist for early access.</span>
         </p>
 
         <ul className="mt-8 flex flex-wrap justify-center gap-2" aria-label="Who it’s for">
