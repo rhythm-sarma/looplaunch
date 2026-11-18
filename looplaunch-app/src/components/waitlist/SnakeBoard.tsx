@@ -709,7 +709,7 @@ export function SnakeBoard({ clock, target, touch, onStatus, onFinish, onSkip, o
           <button
             type="button"
             onClick={onSkip}
-            className="min-h-10 px-2 text-sm text-text-secondary underline underline-offset-4 transition-colors hover:text-text-primary"
+            className="mt-1 inline-flex min-h-10 items-center justify-center rounded-xl bg-[#8B5CF6] px-5 text-sm font-semibold text-white transition-[background-color,transform] duration-150 hover:bg-[#7C3AED] active:scale-[0.98]"
           >
             Skip the game, just join
           </button>

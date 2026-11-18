@@ -206,8 +206,8 @@
   max-width: 14ch;
   line-height: 1.25;
 }
-/* "The problem isn't effort." / "It's direction.": one sentence per line. It sits above its charts on
-   every screen, so it keeps the full heading size; the cap only guards very narrow columns. */
+/* "The problem isn't effort." / "It's direction.": one sentence per line, at the full heading size (its
+   column is sized to fit it); the cap only guards very narrow columns. */
 .nw-pb-hwrap {
   container-type: inline-size;
 }
@@ -256,12 +256,6 @@
   font-size: var(--nw-fs-closing);
   line-height: 1.6;
   max-width: 56ch;
-}
-/* Each card is as tall as its own chart: the survey card is twice as long as the other one */
-.nw-stat-cards {
-  display: grid;
-  gap: 16px;
-  align-items: start;
 }
 .nw-stat-card {
   margin: 0;
@@ -334,11 +328,6 @@
 .nw-bars li.nw-hi .nw-b-t i {
   background: var(--nw-accent);
 }
-.nw-sc-src {
-  margin-top: 24px;
-  font-size: 13px;
-  color: var(--nw-muted);
-}
 /* "It's not an execution problem." / "It's a decision problem.": one per line, the second one bright */
 .nw-sc-lead {
   font-size: 16px;
@@ -349,30 +338,6 @@
 .nw-sc-lead strong {
   color: var(--nw-text);
   font-weight: 600;
-}
-/* Footnote numbers on the bars, and the surveys they point to */
-.nw-b-l sup {
-  margin-left: 3px;
-  font-size: 0.68em;
-  line-height: 0;
-  color: var(--nw-muted);
-}
-.nw-sc-notes {
-  list-style: decimal;
-  margin: 28px 0 0;
-  padding: 20px 0 0 1.4em;
-  border-top: 1px solid var(--nw-line);
-  display: grid;
-  gap: 8px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--nw-muted);
-}
-.nw-sc-notes li::marker {
-  font-variant-numeric: tabular-nums;
-}
-.nw-sc-n {
-  color: var(--nw-text-2);
 }
 .nw-pb-foot {
   margin-top: 28px;
@@ -400,23 +365,22 @@
   }
 }
 @media (min-width: 720px) {
-  .nw-stat-cards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
   .nw-pb-foot {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
   }
 }
-/* The first row's heading sits beside its questions from 1200px. The second row stays stacked, heading
-   above the charts, so "The problem isn't effort." keeps the full heading size on one line. */
+/* From 1200px each heading sits on the left: the first beside its questions, the second beside its
+   chart. The second heading's column is wider, so "The problem isn't effort." stays on one line at the
+   same size as the first heading. */
 @media (min-width: 1200px) {
-  .nw-pb-row:not(.nw-pb-row2) {
+  .nw-pb-row {
     grid-template-columns: 5fr 8fr;
     gap: 64px;
   }
   .nw-pb-row2 {
+    grid-template-columns: 12fr 13fr;
     margin-top: 96px;
   }
   /* Starts the questions level with the heading, below the eyebrow above it */
