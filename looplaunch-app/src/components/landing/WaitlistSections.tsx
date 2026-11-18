@@ -81,13 +81,23 @@ export function WaitlistSections() {
 
 /* ─── The problem, with numbers ─── */
 
-const SHUTDOWNS = [
-  { label: "Ran out of capital", value: 70 },
-  { label: "Poor product-market fit", value: 43, ours: true },
-  { label: "Wrong market timing", value: 29 },
-  { label: "Unsustainable unit economics", value: 19 },
-  { label: "Ineffective strategic pivot", value: 6, ours: true },
-  { label: "Outcompeted by rivals", value: 6, ours: true },
+/* Anayana's list (founder), in her order: "stand out from competitors" comes right after the action
+   plan. `note` points at SURVEYS, numbered in the order they first appear. */
+const SAID = [
+  { label: "Not sure our strategy is working", value: 73, note: 1, ours: true },
+  { label: "No clear marketing action plan", value: 67, note: 2, ours: true },
+  { label: "Struggle to stand out from competitors", value: 20, note: 3, ours: true },
+  { label: "Can’t reach the right audience", value: 54, note: 4 },
+  { label: "Need to pick the right channels", value: 37, note: 1 },
+  { label: "Struggle to come up with post ideas", value: 37, note: 4, ours: true },
+  { label: "Can’t tell what’s working", value: 33, note: 1 },
+  { label: "Need to know what to do next", value: 27, note: 1, ours: true },
+];
+const SURVEYS = [
+  ["Constant Contact, Small Business Now, 2024", "1,300+ small business decision-makers in the US, UK, Canada and Australia."],
+  ["The Marketing Centre, Marketing 360 report, 2024", "1,988 marketing decision-makers at UK SMEs."],
+  ["LocalImpact, State of Small Business Marketing, 2025", "400 US local business owners and managers."],
+  ["GoDaddy Global Entrepreneurship Survey, 2025", "3,504 small business owners in 11 countries, including India."],
 ];
 const SMALL_BUSINESSES = [
   { label: "Aren’t sure their marketing strategy is working", value: 73, ours: true },
@@ -96,12 +106,15 @@ const SMALL_BUSINESSES = [
   { label: "Routinely put off marketing", value: 52, ours: true },
 ];
 
-function Bars({ rows }: { rows: { label: string; value: number; ours?: boolean }[] }) {
+function Bars({ rows }: { rows: { label: string; value: number; note?: number; ours?: boolean }[] }) {
   return (
     <ul className="nw-bars">
       {rows.map((row, i) => (
         <li key={row.label} className={row.ours ? "nw-hi" : undefined}>
-          <span className="nw-b-l">{row.label}</span>
+          <span className="nw-b-l">
+            {row.label}
+            {row.note ? <sup>{row.note}</sup> : null}
+          </span>
           <span className="nw-b-n">{row.value}%</span>
           <span className="nw-b-t" aria-hidden="true">
             <i style={{ width: `${row.value}%`, transitionDelay: `${i * 80}ms` }} />
@@ -155,14 +168,19 @@ function ProblemSection() {
             <div ref={cardsRef} className={`nw-stat-cards${grown ? " nw-go" : ""}`}>
               <figure className="nw-stat-card" data-reveal>
                 <figcaption>
-                  <h3 className="nw-sc-t">Why startups shut down</h3>
-                  <p className="nw-sc-s">
-                    % of 385 VC-backed startup shutdowns with known reasons. More than one reason can apply. Top 6 of 9
-                    shown.
+                  <h3 className="nw-sc-t">What 7,000+ small businesses said about their marketing</h3>
+                  <p className="nw-sc-s nw-sc-lead">
+                    <span>It’s not an execution problem.</span> <strong>It’s a decision problem.</strong>
                   </p>
                 </figcaption>
-                <Bars rows={SHUTDOWNS} />
-                <p className="nw-sc-src">Source: CB Insights</p>
+                <Bars rows={SAID} />
+                <ol className="nw-sc-notes">
+                  {SURVEYS.map(([name, who]) => (
+                    <li key={name}>
+                      <span className="nw-sc-n">{name}</span>: {who}
+                    </li>
+                  ))}
+                </ol>
               </figure>
               <figure className="nw-stat-card" data-reveal style={delay(80)}>
                 <figcaption>
@@ -174,7 +192,7 @@ function ProblemSection() {
               </figure>
             </div>
             <div className="nw-pb-foot" data-reveal>
-              <p>Loopy works on the purple bars: fit, competition, strategy and what to post.</p>
+              <p>Loopy works on the purple bars: strategy, a plan for the week, competition and what to post.</p>
               <JoinButton />
             </div>
           </div>

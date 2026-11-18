@@ -257,9 +257,11 @@
   line-height: 1.6;
   max-width: 56ch;
 }
+/* Each card is as tall as its own chart: the survey card is twice as long as the other one */
 .nw-stat-cards {
   display: grid;
   gap: 16px;
+  align-items: start;
 }
 .nw-stat-card {
   margin: 0;
@@ -336,6 +338,41 @@
   margin-top: 24px;
   font-size: 13px;
   color: var(--nw-muted);
+}
+/* "It's not an execution problem." / "It's a decision problem.": one per line, the second one bright */
+.nw-sc-lead {
+  font-size: 16px;
+}
+.nw-sc-lead > * {
+  display: block;
+}
+.nw-sc-lead strong {
+  color: var(--nw-text);
+  font-weight: 600;
+}
+/* Footnote numbers on the bars, and the surveys they point to */
+.nw-b-l sup {
+  margin-left: 3px;
+  font-size: 0.68em;
+  line-height: 0;
+  color: var(--nw-muted);
+}
+.nw-sc-notes {
+  list-style: decimal;
+  margin: 28px 0 0;
+  padding: 20px 0 0 1.4em;
+  border-top: 1px solid var(--nw-line);
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--nw-muted);
+}
+.nw-sc-notes li::marker {
+  font-variant-numeric: tabular-nums;
+}
+.nw-sc-n {
+  color: var(--nw-text-2);
 }
 .nw-pb-foot {
   margin-top: 28px;
