@@ -144,9 +144,11 @@ function ProblemSection() {
         </div>
 
         <div className="nw-pb-row nw-pb-row2">
-          <div data-reveal>
+          <div className="nw-pb-hwrap" data-reveal>
             <p className="nw-eyebrow">The problem</p>
-            <h2 className="nw-h2 nw-pb-h">The problem isn’t effort. It’s direction.</h2>
+            <h2 className="nw-h2 nw-pb-h nw-pb-h-split">
+              <span>The problem isn’t effort.</span> <span>It’s direction.</span>
+            </h2>
           </div>
           <div>
             <div ref={cardsRef} className={`nw-stat-cards${grown ? " nw-go" : ""}`}>

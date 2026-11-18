@@ -116,14 +116,14 @@ export function MarkdownContent({
           return <hr key={idx} className="border-t border-[#27272A] my-4" />;
         }
 
-        // Header 3
-        if (trimmed.startsWith("### ")) {
+        // Header 3 and deeper (the AI sometimes writes "#### STOP / START"; it shouldn't show the hashes)
+        if (/^#{3,6}\s/.test(trimmed)) {
           return (
             <h4
               key={idx}
               className="text-[15px] font-semibold text-[#F4F4F5] pt-2 tracking-tight"
             >
-              {renderInline(trimmed.replace(/^###\s+/, ""))}
+              {renderInline(trimmed.replace(/^#{3,6}\s+/, ""))}
               {isLastBlock && isTyping && (
                 <span className="inline-block w-1.5 h-3.5 ml-1 bg-[#B4B4BC] align-middle" />
               )}
