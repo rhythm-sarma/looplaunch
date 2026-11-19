@@ -18,6 +18,33 @@ export function cleanIndustry(raw: unknown): Industry | null {
 
 export const ROLE_MAX = 60;
 export const BRAND_LINK_MAX = 300;
+/** Room for "+91 98765 43210" typed with spaces, dashes or brackets. */
+export const WHATSAPP_MAX = 24;
+
+/**
+ * A WhatsApp number as stored: "+" and its digits, e.g. "+919876543210". Optional on the form, so
+ * nothing typed is "" and a number that can't be one is null.
+ * Spaces, dashes, dots and brackets are dropped. A leading "00" counts as "+". Ten digits with no
+ * country code are taken as an Indian mobile (Loop Launch targets India first), with or without
+ * the trunk "0" in front. Otherwise the country code must be there: 8 to 15 digits in all (E.164).
+ */
+export function cleanWhatsapp(raw: unknown): string | null {
+  if (typeof raw !== "string") return raw === undefined || raw === null ? "" : null;
+  const typed = raw.trim();
+  if (!typed) return "";
+  if (typed.length > WHATSAPP_MAX || !/^\+?[\d\s().-]+$/.test(typed)) return null;
+  const plus = typed.startsWith("+");
+  let digits = typed.replace(/\D/g, "");
+  if (!plus && digits.startsWith("00")) return toE164(digits.slice(2));
+  if (plus) return toE164(digits);
+  if (/^0[6-9]\d{9}$/.test(digits)) digits = digits.slice(1);
+  if (/^[6-9]\d{9}$/.test(digits)) return `+91${digits}`;
+  return toE164(digits);
+}
+
+function toE164(digits: string): string | null {
+  return /^[1-9]\d{7,14}$/.test(digits) ? `+${digits}` : null;
+}
 
 /** Where a brand link points, worked out from the address so the table can be filtered by it. */
 export type BrandPlatform = "website" | "instagram" | "linkedin" | "facebook" | "x" | "youtube" | "tiktok" | "other";

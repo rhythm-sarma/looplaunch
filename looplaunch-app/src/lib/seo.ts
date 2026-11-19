@@ -23,7 +23,7 @@ export function getSiteUrl(): string {
 
 export const siteConfig = {
   name: "Loop Launch",
-  title: "Loop Launch — Human Intelligence-Powered Strategy and Content Engine",
+  title: "Loop Launch: Human Intelligence-Powered Strategy and Content Engine",
   description:
     "Your virtual CMO. It scans your business, competitors and market, then tells you exactly what to do this week.",
   url: getSiteUrl(),

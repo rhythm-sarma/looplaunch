@@ -1,5 +1,5 @@
 /**
- * The waitlist and its leaderboard, on the Supabase `waitlist` table (migrations 006, 008, 009 and 010).
+ * The waitlist and its leaderboard, on the Supabase `waitlist` table (migrations 006, 008, 009, 010 and 011).
  * In local development without Supabase an in-memory list stands in, so the page still works.
  *
  * A row is on the board once it has a first name and a time: fastest first, equal times in the
@@ -40,6 +40,7 @@ interface NewRow {
   brand_link: string | null;
   brand_platform: string | null;
   industry: string | null;
+  whatsapp: string | null;
 }
 
 export interface WaitlistStore {
@@ -52,6 +53,8 @@ export interface WaitlistStore {
   fillDetails(id: string, details: WaitlistDetails): Promise<void>;
   /** Fills in an industry the row doesn't have yet. */
   fillIndustry(id: string, industry: string): Promise<void>;
+  /** Fills in a WhatsApp number the row doesn't have yet. */
+  fillWhatsapp(id: string, whatsapp: string): Promise<void>;
   /** Saves the time only if the row has none yet (one go per person); true when it did. */
   saveFirstTime(id: string, timeMs: number, at: string): Promise<boolean>;
   board(): Promise<Board>;
@@ -75,12 +78,13 @@ function toEntry(row: WaitlistRow): BoardEntry {
   return { id: row.id, name: row.first_name ?? "", timeMs: row.best_time_ms ?? 0 };
 }
 
-// Migration 009 adds role, brand_link and brand_platform, and 010 adds industry. Until each is run,
+// Migration 009 adds role, brand_link and brand_platform, 010 adds industry and 011 whatsapp. Until each is run,
 // rows are saved without those columns (with a warning) rather than failing, so deploying first
 // loses nothing else.
 const OPTIONAL_COLUMNS = [
   { columns: ["role", "brand_link", "brand_platform"], what: "role and brand link", migration: "009_waitlist_details_and_logins.sql" },
   { columns: ["industry"], what: "industry", migration: "010_waitlist_industry.sql" },
+  { columns: ["whatsapp"], what: "WhatsApp number", migration: "011_waitlist_whatsapp.sql" },
 ] as const;
 type OptionalColumns = (typeof OPTIONAL_COLUMNS)[number];
 
@@ -97,6 +101,7 @@ function warnMissing(group: OptionalColumns) {
 }
 const DETAILS_GROUP = OPTIONAL_COLUMNS[0];
 const INDUSTRY_GROUP = OPTIONAL_COLUMNS[1];
+const WHATSAPP_GROUP = OPTIONAL_COLUMNS[2];
 
 export function supabaseStore(db: SupabaseClient): WaitlistStore {
   const waitlist = () => db.from("waitlist");
@@ -146,6 +151,11 @@ export function supabaseStore(db: SupabaseClient): WaitlistStore {
       const result = await waitlist().update({ industry }).eq("id", id).is("industry", null);
       if (missingColumns(result.error) === INDUSTRY_GROUP) return warnMissing(INDUSTRY_GROUP);
       check(result, "industry");
+    },
+    async fillWhatsapp(id, whatsapp) {
+      const result = await waitlist().update({ whatsapp }).eq("id", id).is("whatsapp", null);
+      if (missingColumns(result.error) === WHATSAPP_GROUP) return warnMissing(WHATSAPP_GROUP);
+      check(result, "whatsapp");
     },
     async saveFirstTime(id, timeMs, at) {
       const result = await waitlist()
@@ -226,6 +236,10 @@ export function createMemoryStore(rows = new Map<string, MemoryRow>()): Waitlist
       const row = byId(id);
       if (row && !row.industry) row.industry = industry;
     },
+    async fillWhatsapp(id, whatsapp) {
+      const row = byId(id);
+      if (row && !row.whatsapp) row.whatsapp = whatsapp;
+    },
     async saveFirstTime(id, timeMs, at) {
       const row = byId(id);
       if (!row || row.best_time_ms !== null) return false;
@@ -273,6 +287,8 @@ export interface JoinInput {
   details?: WaitlistDetails | null;
   /** The industry they picked, if any. */
   industry?: string | null;
+  /** Their WhatsApp number ("+919876543210"), if they gave one. */
+  whatsapp?: string | null;
 }
 
 export interface JoinResult {
@@ -313,6 +329,7 @@ export async function joinWaitlist(store: WaitlistStore, input: JoinInput): Prom
       brand_link: input.details.brandLink,
       brand_platform: input.details.brandPlatform,
       industry: input.industry ?? null,
+      whatsapp: input.whatsapp || null,
     });
     if (row) {
       improved = input.timeMs !== null;
@@ -327,6 +344,7 @@ export async function joinWaitlist(store: WaitlistStore, input: JoinInput): Prom
   if (alreadyJoined) {
     if (input.details) await store.fillDetails(row.id, input.details);
     if (input.industry) await store.fillIndustry(row.id, input.industry);
+    if (input.whatsapp) await store.fillWhatsapp(row.id, input.whatsapp);
     if (!row.first_name) {
       await store.claimName(row.id, input.firstName, now);
       row = { ...row, first_name: input.firstName };

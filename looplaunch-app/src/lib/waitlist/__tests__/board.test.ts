@@ -110,6 +110,22 @@ describe("waitlist leaderboard", () => {
     await joinWaitlist(store, { ...base, email: "none@x.com", industry: "Beauty & Personal Care" });
     assert.equal(rows.get("none@x.com").industry, "Beauty & Personal Care");
   });
+
+  test("a WhatsApp number is saved, filled in later only when there was none", async () => {
+    const rows = new Map();
+    const store = createMemoryStore(rows);
+    const base = { firstName: "Isha", timeMs: null, source: null, userAgent: null, details: DETAILS };
+    await joinWaitlist(store, { ...base, email: "isha@x.com", whatsapp: "+919876543210" });
+    assert.equal(rows.get("isha@x.com").whatsapp, "+919876543210");
+
+    await joinWaitlist(store, { ...base, email: "isha@x.com", whatsapp: "+14155550100" });
+    assert.equal(rows.get("isha@x.com").whatsapp, "+919876543210", "someone who knows an email can't change it");
+
+    await joinWaitlist(store, { ...base, email: "none@x.com", whatsapp: "" });
+    assert.equal(rows.get("none@x.com").whatsapp, null);
+    await joinWaitlist(store, { ...base, email: "none@x.com", whatsapp: "+447700900123" });
+    assert.equal(rows.get("none@x.com").whatsapp, "+447700900123");
+  });
 });
 
 describe("first names on the board", () => {
@@ -159,7 +175,16 @@ describe("saving before a migration has been run", () => {
   const row = {
     email: "a@x.com", first_name: "Asha", best_time_ms: null, best_time_at: null, consented_at: "now",
     source: null, user_agent: null, role: "Founder", brand_link: "brand.com", brand_platform: "website", industry: "Fashion",
+    whatsapp: "+919876543210",
   };
+
+  test("without 011, the row is saved without its WhatsApp number and keeps everything else", async () => {
+    const { store, inserts } = tableWithout(["whatsapp"]);
+    assert.ok(await store.insert(row));
+    assert.equal(inserts.length, 2);
+    assert.equal("whatsapp" in inserts[1], false);
+    assert.equal(inserts[1].industry, "Fashion");
+  });
 
   test("without 010, the row is saved without its industry and keeps everything else", async () => {
     const { store, inserts } = tableWithout(["industry"]);
@@ -169,10 +194,10 @@ describe("saving before a migration has been run", () => {
     assert.equal(inserts[1].role, "Founder");
   });
 
-  test("without 009 or 010, the row is saved with name and email only", async () => {
-    const { store, inserts } = tableWithout(["industry", "role", "brand_link", "brand_platform"]);
+  test("without 009, 010 or 011, the row is saved with name and email only", async () => {
+    const { store, inserts } = tableWithout(["industry", "role", "brand_link", "brand_platform", "whatsapp"]);
     assert.ok(await store.insert(row));
-    assert.equal(inserts.length, 3);
-    assert.deepEqual(Object.keys(inserts[2]).sort(), ["best_time_at", "best_time_ms", "consented_at", "email", "first_name", "source", "user_agent"]);
+    assert.equal(inserts.length, 4);
+    assert.deepEqual(Object.keys(inserts[3]).sort(), ["best_time_at", "best_time_ms", "consented_at", "email", "first_name", "source", "user_agent"]);
   });
 });

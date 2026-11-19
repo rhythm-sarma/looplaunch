@@ -1,8 +1,8 @@
 /**
  * POST /api/waitlist
  *
- * Body: { email, firstName, consent, role?, brand?, industry?, run?, company? }
- * Adds someone to the Supabase `waitlist` table (migrations 006, 008, 009 and 010). Public: this is the
+ * Body: { email, firstName, consent, role?, brand?, industry?, whatsapp?, run?, company? }
+ * Adds someone to the Supabase `waitlist` table (migrations 006, 008, 009, 010 and 011). Public: this is the
  * only thing visitors can do while Loop Launch is invite-only.
  *
  * `role` (Founder, CEO… or their own words) and `brand` (where the brand lives online: a website,
@@ -11,6 +11,10 @@
  *
  * `industry` is optional: one of INDUSTRY_OPTIONS (Fashion, Food & Beverage, Beauty & Personal Care,
  * Agency, Something else). Anything else is ignored. Someone already on the list with none gets this one.
+ *
+ * `whatsapp` is optional too: a phone number, stored as "+" and digits (ten digits alone are taken as
+ * an Indian mobile). Empty is fine; a number that can't be one is an error to fix. Someone already on
+ * the list with none gets this one.
  *
  * `run` is a finished game of Loopy's snake, { seed, turns }. The server replays it to get the
  * time, so a time can't be made up. Each person gets one go: only their first time is kept.
@@ -22,7 +26,7 @@
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/db/supabase";
 import { BoardNotSetUpError, MissingDetailsError, joinWaitlist, waitlistStore } from "@/lib/waitlist/board";
-import { cleanBrandLink, cleanIndustry, cleanRole, parseDetails } from "@/lib/waitlist/details";
+import { cleanBrandLink, cleanIndustry, cleanRole, cleanWhatsapp, parseDetails } from "@/lib/waitlist/details";
 import { cleanFirstName, isBlockedName } from "@/lib/waitlist/names";
 import { parseRun, replay } from "@/lib/waitlist/snake";
 import type { JoinResponse } from "@/lib/waitlist/types";
@@ -63,6 +67,7 @@ export async function POST(request: Request) {
     role?: unknown;
     brand?: unknown;
     industry?: unknown;
+    whatsapp?: unknown;
   };
   const firstName = cleanFirstName(body.firstName);
 
@@ -99,6 +104,8 @@ export async function POST(request: Request) {
   }
 
   const industry = cleanIndustry(body.industry);
+  const whatsapp = cleanWhatsapp(body.whatsapp);
+  if (whatsapp === null) return badRequest("Please check your WhatsApp number (with the country code, like +91 98765 43210), or leave it empty.");
 
   // A run that doesn't replay to a finish still lets the person join; it just doesn't get a time.
   let timeMs: number | null = null;
@@ -119,7 +126,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const joined = await joinWaitlist(store, { email, firstName, timeMs, source, userAgent, details, industry });
+    const joined = await joinWaitlist(store, { email, firstName, timeMs, source, userAgent, details, industry, whatsapp });
     const response: JoinResponse = {
       ok: true,
       alreadyJoined: joined.alreadyJoined,

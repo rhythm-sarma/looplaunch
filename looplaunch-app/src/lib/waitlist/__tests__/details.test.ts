@@ -1,9 +1,30 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { INDUSTRY_OPTIONS, brandPlatformOf, cleanBrandLink, cleanIndustry, cleanRole, parseDetails } from "../details";
+import { INDUSTRY_OPTIONS, brandPlatformOf, cleanBrandLink, cleanIndustry, cleanRole, cleanWhatsapp, parseDetails } from "../details";
 import { MissingDetailsError, createMemoryStore, joinWaitlist } from "../board";
 
 describe("waitlist details", () => {
+  test("a WhatsApp number becomes + and digits; ten digits alone are an Indian mobile", () => {
+    assert.equal(cleanWhatsapp("+91 98765 43210"), "+919876543210");
+    assert.equal(cleanWhatsapp("98765-43210"), "+919876543210");
+    assert.equal(cleanWhatsapp("098765 43210"), "+919876543210");
+    assert.equal(cleanWhatsapp("0091 98765 43210"), "+919876543210");
+    assert.equal(cleanWhatsapp("919876543210"), "+919876543210");
+    assert.equal(cleanWhatsapp("+1 (415) 555-0100"), "+14155550100");
+    assert.equal(cleanWhatsapp("+44 7700 900123"), "+447700900123");
+    // Optional: nothing typed is fine.
+    assert.equal(cleanWhatsapp(""), "");
+    assert.equal(cleanWhatsapp("   "), "");
+    assert.equal(cleanWhatsapp(undefined), "");
+    // Not a number.
+    assert.equal(cleanWhatsapp("call me"), null);
+    assert.equal(cleanWhatsapp("12345"), null);
+    assert.equal(cleanWhatsapp("+0 98765 43210"), null);
+    assert.equal(cleanWhatsapp("+91 98765 43210 ext 5"), null);
+    assert.equal(cleanWhatsapp("+1234567890123456"), null);
+    assert.equal(cleanWhatsapp(9876543210), null);
+  });
+
   test("an industry is one of the options exactly, or nothing", () => {
     for (const option of INDUSTRY_OPTIONS) assert.equal(cleanIndustry(option), option);
     assert.equal(cleanIndustry("fashion"), null);

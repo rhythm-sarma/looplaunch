@@ -5,7 +5,17 @@ import { AnimatePresence, animate, motion, useReducedMotion, type Variants } fro
 import { LoopyMascot } from "@/components/loopy/LoopyMascot";
 import { RollingCount } from "@/components/dashboard/RollingCount";
 import { FIRST_NAME_MAX, cleanFirstName } from "@/lib/waitlist/names";
-import { BRAND_LINK_MAX, INDUSTRY_OPTIONS, ROLE_MAX, ROLE_OPTIONS, cleanBrandLink, cleanIndustry, cleanRole } from "@/lib/waitlist/details";
+import {
+  BRAND_LINK_MAX,
+  INDUSTRY_OPTIONS,
+  ROLE_MAX,
+  ROLE_OPTIONS,
+  WHATSAPP_MAX,
+  cleanBrandLink,
+  cleanIndustry,
+  cleanRole,
+  cleanWhatsapp,
+} from "@/lib/waitlist/details";
 import { TARGET, formatTime, type FinishedRun } from "@/lib/waitlist/snake";
 import type { Board, JoinResponse } from "@/lib/waitlist/types";
 import { bestRank, rankOn } from "./WaitlistGame";
@@ -48,12 +58,12 @@ interface JoinFormProps {
   /** `industry` is pre-picked when they came from an industry's button on the page. */
   defaults: { firstName: string; email: string; industry: string };
   submitLabel: string;
-  /** New to the waitlist: also ask for their industry, role and where their brand lives online. */
+  /** New to the waitlist: also ask for their WhatsApp number and industry (both optional), role and where their brand lives online. */
   askDetails: boolean;
   onJoined(result: JoinResponse, email: string): void;
 }
 
-type Errors = { name?: string; email?: string; role?: string; brand?: string; form?: string };
+type Errors = { name?: string; email?: string; whatsapp?: string; role?: string; brand?: string; form?: string };
 
 function FieldError({ id, children }: { id: string; children: React.ReactNode }) {
   return (
@@ -69,7 +79,8 @@ function FieldError({ id, children }: { id: string; children: React.ReactNode })
 }
 
 /**
- * First name and email, and for someone new their industry (optional), role and where their brand lives online.
+ * First name and email, and for someone new their WhatsApp number and industry (both optional), role and where
+ * their brand lives online.
  * A finished run goes with it, for the server to replay.
  */
 export function JoinForm({ run, defaults, submitLabel, askDetails, onJoined }: JoinFormProps) {
@@ -77,6 +88,7 @@ export function JoinForm({ run, defaults, submitLabel, askDetails, onJoined }: J
   const [email, setEmail] = useState(defaults.email);
   // The server can ask for the details too, when this browser thought it had already joined.
   const [showDetails, setShowDetails] = useState(askDetails);
+  const [whatsapp, setWhatsapp] = useState("");
   const [industry, setIndustry] = useState<string>(cleanIndustry(defaults.industry) ?? "");
   const [roleChoice, setRoleChoice] = useState("");
   const [ownRole, setOwnRole] = useState("");
@@ -92,6 +104,7 @@ export function JoinForm({ run, defaults, submitLabel, askDetails, onJoined }: J
   }, [onJoined]);
   const nameRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
+  const whatsappRef = useRef<HTMLInputElement>(null);
   const roleRef = useRef<HTMLButtonElement>(null);
   const ownRoleRef = useRef<HTMLInputElement>(null);
   const brandRef = useRef<HTMLInputElement>(null);
@@ -114,6 +127,7 @@ export function JoinForm({ run, defaults, submitLabel, askDetails, onJoined }: J
     if (!mail) next.email = "Add your email.";
     else if (!EMAIL_PATTERN.test(mail)) next.email = "That email doesn't look right.";
     if (showDetails) {
+      if (cleanWhatsapp(whatsapp) === null) next.whatsapp = "Add it with the country code, like +91\u00a098765\u00a043210, or leave it empty.";
       if (!roleChoice) next.role = "Pick your role.";
       else if (!cleanRole(role)) next.role = "Type your role.";
       if (!brand.trim()) next.brand = "Add a link to your brand.";
@@ -122,6 +136,7 @@ export function JoinForm({ run, defaults, submitLabel, askDetails, onJoined }: J
     setErrors(next);
     if (next.name) return nameRef.current?.focus();
     if (next.email) return emailRef.current?.focus();
+    if (next.whatsapp) return whatsappRef.current?.focus();
     if (next.role) return (roleChoice === "Other" ? ownRoleRef : roleRef).current?.focus();
     if (next.brand) return brandRef.current?.focus();
 
@@ -135,7 +150,14 @@ export function JoinForm({ run, defaults, submitLabel, askDetails, onJoined }: J
           email: mail,
           // Joining the waitlist is the request to hear about the launch, so it carries that consent.
           consent: true,
-          ...(showDetails ? { role: cleanRole(role), brand: brand.trim(), ...(industry ? { industry } : {}) } : {}),
+          ...(showDetails
+            ? {
+                role: cleanRole(role),
+                brand: brand.trim(),
+                ...(industry ? { industry } : {}),
+                ...(whatsapp.trim() ? { whatsapp: whatsapp.trim() } : {}),
+              }
+            : {}),
           company: honeypot,
           run: run ? { seed: run.seed, turns: run.turns } : undefined,
         }),
@@ -237,6 +259,30 @@ export function JoinForm({ run, defaults, submitLabel, askDetails, onJoined }: J
 
       {showDetails && (
         <>
+          <motion.label variants={rise} className="mt-4 block">
+            <span className="text-sm font-medium text-text-secondary">
+              WhatsApp number <span className="font-normal text-text-tertiary">(optional)</span>
+            </span>
+            <input
+              ref={whatsappRef}
+              type="tel"
+              inputMode="tel"
+              value={whatsapp}
+              disabled={sending}
+              onChange={(e) => {
+                setWhatsapp(e.target.value);
+                if (errors.whatsapp) setErrors((x) => ({ ...x, whatsapp: undefined }));
+              }}
+              autoComplete="tel"
+              maxLength={WHATSAPP_MAX}
+              placeholder="+91 98765 43210"
+              aria-invalid={Boolean(errors.whatsapp)}
+              aria-describedby={errors.whatsapp ? "join-whatsapp-error" : undefined}
+              className={`${field} ${errors.whatsapp ? "border-white" : "border-white/15"}`}
+            />
+            {errors.whatsapp && <FieldError id="join-whatsapp-error">{errors.whatsapp}</FieldError>}
+          </motion.label>
+
           <motion.fieldset variants={rise} className="mt-4">
             <legend className="text-sm font-medium text-text-secondary">
               Your industry <span className="font-normal text-text-tertiary">(optional)</span>
