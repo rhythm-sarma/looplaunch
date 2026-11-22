@@ -4,7 +4,7 @@ import { Check } from "lucide-react";
 import { PipelineStrip } from "@/components/dashboard/PipelineStrip";
 import { LoopyMascot } from "@/components/loopy/LoopyMascot";
 import { displayDomain } from "@/lib/intelligence/summary";
-import { STEPS, type OnboardingData, type StepKey } from "@/lib/onboarding/types";
+import { STEPS, answerText, type OnboardingData, type StepKey } from "@/lib/onboarding/types";
 
 /** Short names for the brief, in question order. */
 const BRIEF_LABELS: Partial<Record<StepKey, string>> = {
@@ -17,15 +17,15 @@ const BRIEF_LABELS: Partial<Record<StepKey, string>> = {
   salesChannels: "Where you sell",
   biggestHeadache: "Biggest headache",
   thirtyDayGoal: "30-day goal",
+  pitchDeck: "Pitch deck",
 };
 
 /** The visitor's own answers, filling in as they go: what the research will be built from. */
 export function BriefPanel({ data, currentKey }: { data: OnboardingData; currentKey: StepKey }) {
   const steps = STEPS.filter((s) => s.field);
-  const answered = steps.filter((s) => {
-    const v = data[s.field!];
-    return Array.isArray(v) ? v.length > 0 : !!v;
-  }).length;
+  // The count is of the nine questions; the optional deck doesn't hold it back.
+  const required = steps.filter((s) => !s.optional);
+  const answered = required.filter((s) => answerText(data, s.field!)).length;
 
   return (
     <div data-ui className="rounded-2xl bg-[#111114] border border-[#27272A] p-5 max-w-[560px] lg:ml-auto">
@@ -38,14 +38,13 @@ export function BriefPanel({ data, currentKey }: { data: OnboardingData; current
           </p>
         </div>
         <span className="ml-auto text-[13px] text-[#B4B4BC] tabular-nums shrink-0">
-          {answered} of {steps.length}
+          {answered} of {required.length}
         </span>
       </div>
 
       <ol className="mt-4 divide-y divide-[#1F1F24]">
         {steps.map((s) => {
-          const raw = data[s.field!];
-          const value = Array.isArray(raw) ? raw.join(", ") : raw;
+          const value = answerText(data, s.field!);
           const current = s.key === currentKey;
           return (
             <li key={s.key} className="flex items-center gap-3 py-2.5 min-h-[44px]">
@@ -61,7 +60,17 @@ export function BriefPanel({ data, currentKey }: { data: OnboardingData; current
                 {BRIEF_LABELS[s.key]}
               </span>
               <span className={`text-[14px] min-w-0 truncate ${value ? "text-[#F4F4F5]" : "text-[#8B8B94]"}`}>
-                {value ? (s.key === "website" ? displayDomain(value) : value) : current ? "Answering now" : "—"}
+                {value
+                  ? s.key === "website"
+                    ? displayDomain(value)
+                    : value
+                  : current
+                    ? s.optional
+                      ? "Adding now (optional)"
+                      : "Answering now"
+                    : s.optional
+                      ? "Optional"
+                      : "—"}
               </span>
             </li>
           );

@@ -19,6 +19,7 @@ import { answerQuestion } from "@/lib/ai/gemini";
 import { retrieveFrameworkContext } from "@/lib/ai/framework-retriever";
 import { researchQuestion } from "@/lib/research/tavily";
 import { analyzeUserQuery } from "@/lib/ai/query-classifier";
+import { humanizeMessage } from "@/lib/intelligence/humanize";
 import type {
   AskResponse,
   StrategicQuestion,
@@ -217,7 +218,8 @@ async function answerAndSave(
 
   const response: AskResponse = {
     answer,
-    messages: session.messages,
+    // Answers saved before the no-em-dash rule are cleaned on the way out.
+    messages: session.messages?.map(humanizeMessage),
   };
   return NextResponse.json(response);
 }

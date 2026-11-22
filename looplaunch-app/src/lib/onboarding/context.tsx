@@ -36,7 +36,7 @@ interface OnboardingContextValue {
   currentStepIndex: number;
   currentStep: (typeof STEPS)[number];
   totalSteps: number;
-  updateField: (field: keyof OnboardingData, value: string | string[]) => void;
+  updateField: <K extends keyof OnboardingData>(field: K, value: OnboardingData[K]) => void;
   goNext: () => void;
   goPrev: () => void;
   goToStep: (index: number) => void;
@@ -68,7 +68,8 @@ export function OnboardingProvider({ children, initialData }: OnboardingProvider
       const saved = sessionStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.data) setData(parsed.data);
+        // Answers saved before a field existed (the pitch deck) get its empty value.
+        if (parsed.data) setData({ ...EMPTY_ONBOARDING, ...parsed.data });
         if (typeof parsed.step === "number") setCurrentStepIndex(parsed.step);
       }
     } catch {
@@ -104,12 +105,9 @@ export function OnboardingProvider({ children, initialData }: OnboardingProvider
   const currentStep = STEPS[currentStepIndex];
   const totalSteps = STEPS.length;
 
-  const updateField = useCallback(
-    (field: keyof OnboardingData, value: string | string[]) => {
-      setData((prev) => ({ ...prev, [field]: value }));
-    },
-    []
-  );
+  const updateField = useCallback(<K extends keyof OnboardingData>(field: K, value: OnboardingData[K]) => {
+    setData((prev) => ({ ...prev, [field]: value }));
+  }, []);
 
   const goNext = useCallback(() => {
     setCurrentStepIndex((prev) => Math.min(prev + 1, STEPS.length - 1));

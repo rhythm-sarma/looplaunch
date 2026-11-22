@@ -28,6 +28,7 @@ import {
 } from "./prompts";
 import type { QueryAnalysis } from "./query-classifier";
 import { buildResearchBrief } from "./research-brief";
+import { stripDashes } from "../intelligence/humanize";
 
 // ──────────────────────────────────────────────
 // Singleton Client
@@ -294,11 +295,16 @@ Content: ${r.content}`
     // Filter empty evidence arrays so conversational replies don't have empty evidence sections
     const finalEvidence =
       parsed.evidence && parsed.evidence.length > 0
-        ? parsed.evidence.filter((e) => e.insight && e.insight.trim().length > 0)
+        ? parsed.evidence
+            .filter((e) => e.insight && e.insight.trim().length > 0)
+            .map((e) => ({ ...e, insight: stripDashes(e.insight) }))
         : undefined;
 
     return {
       ...parsed,
+      // The prompt asks for no em dashes; any that slip through are replaced here.
+      answer: stripDashes(parsed.answer),
+      followUpQuestions: parsed.followUpQuestions?.map((q) => stripDashes(q)),
       question,
       evidence: finalEvidence && finalEvidence.length > 0 ? finalEvidence : undefined,
       sources: finalSources,
@@ -358,7 +364,7 @@ export async function answerBuyerQuestion(
 ${about}
 
 ${marketBrief(market)}
-Reply with JSON only, no markdown:
+Reply with JSON only, no markdown. Write like a person talking, in plain words, and never use em dashes (—) or en dashes (–):
 {"answer": "A clear, neutral answer to the question in 2-3 short sentences, written for a normal person. No hype.",
  "tip": "One sentence on exactly how this brand can use this question in its marketing (a post, a page, an FAQ, a video). Start with a verb."}`;
 
@@ -368,7 +374,7 @@ Reply with JSON only, no markdown:
       const result = await model.generateContent(prompt);
       const parsed = parseJsonResponse<Partial<BuyerQuestionAnswer>>(result.response.text());
       if (!parsed.answer) throw new Error("Empty answer");
-      return { answer: parsed.answer.trim(), tip: (parsed.tip || "").trim() };
+      return { answer: stripDashes(parsed.answer.trim()), tip: stripDashes((parsed.tip || "").trim()) };
     } catch (e) {
       lastError = e;
       // The model sometimes returns 503 under load; one short retry usually works.
@@ -403,6 +409,7 @@ ${marketBrief(market)}
 For every question, write:
 - "answer": a clear, neutral answer in 2-3 short sentences for a normal person. No hype.
 - "tip": one sentence on exactly how this brand can use the question in its marketing (a post, a page, an FAQ, a video). Start with a verb.
+Write like a person talking, in plain words, and never use em dashes (—) or en dashes (–).
 
 Reply with JSON only: {"answers": [{"n": 1, "answer": "...", "tip": "..."}]}`;
 
@@ -416,8 +423,8 @@ Reply with JSON only: {"answers": [{"n": 1, "answer": "...", "tip": "..."}]}`;
       .filter((a) => typeof a.n === "number" && a.n >= 1 && a.n <= questions.length && a.answer)
       .map((a) => ({
         question: questions[(a.n as number) - 1],
-        answer: (a.answer as string).trim(),
-        tip: (a.tip || "").trim(),
+        answer: stripDashes((a.answer as string).trim()),
+        tip: stripDashes((a.tip || "").trim()),
       }));
   } catch (e) {
     console.warn("[Gemini] answerBuyerQuestions failed:", e instanceof Error ? e.message : e);

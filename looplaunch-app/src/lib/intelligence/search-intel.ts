@@ -9,6 +9,7 @@
 
 import { classifyAds, selectAds } from "../research/ads";
 import { researchConfig } from "../research/config";
+import { stripDashes } from "./humanize";
 import type {
   AdLibraryEntry,
   AdvertiserAdCreative,
@@ -65,7 +66,8 @@ export function buildSearchIntelView(
   const ownDomain = session.companyIntelligence?.website || session.onboardingInput?.website || "";
   // Everything below uses the same (limited) competitor list the sidebar shows.
   const shown = (session.competitorIntelligence || []).slice(0, limits.maxCompetitors);
-  const competitors = shown.map((c) => ({ ...c, creatives: undefined }));
+  // Descriptions are AI-written: em dashes come out (older analyses have them).
+  const competitors = shown.map((c) => ({ ...c, description: stripDashes(c.description), creatives: undefined }));
 
   // Ads: new runs store their classification; older ones are classified here by domain.
   const storedAds: KeywordAdResult[] =
@@ -99,7 +101,7 @@ export function buildSearchIntelView(
     sourceQuery: q.sourceQuery,
     observedAt: q.observedAt,
     googleAnswer: q.snippet ? { text: q.snippet, sourceTitle: q.title, sourceUrl: q.link } : undefined,
-    aiAnswer: q.answer ? { text: q.answer, tip: q.tip } : undefined,
+    aiAnswer: q.answer ? { text: stripDashes(q.answer), tip: stripDashes(q.tip) } : undefined,
   }));
 
   const searches = research

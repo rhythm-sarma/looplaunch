@@ -30,6 +30,24 @@ export interface OnboardingInput {
   thirtyDayGoal: string;
   /** Derived: Company name extracted from website / crawl */
   companyName?: string;
+  /**
+   * Optional pitch deck or company PDF the founder uploaded. Only its name and size are kept
+   * on the analysis; the text is read once by the business profile (see gather/route.ts).
+   */
+  pitchDeck?: PitchDeckInfo;
+}
+
+/** An uploaded pitch deck, as /api/intelligence/deck reads it. */
+export interface PitchDeckInfo {
+  fileName: string;
+  /** Pages (PDF) or slides (PowerPoint) */
+  pages: number;
+  kind: "pdf" | "pptx";
+}
+
+/** What the upload returns and the onboarding sends with the answers: the deck plus its text. */
+export interface PitchDeckUpload extends PitchDeckInfo {
+  text: string;
 }
 
 // ──────────────────────────────────────────────
@@ -96,6 +114,8 @@ export interface CompanyIntelligence {
   country?: string;
   /** City or area for local businesses ("Austin, Texas"), when the website shows it */
   city?: string;
+  /** Short facts from the founder's pitch deck, when one was uploaded (their claims, not verified) */
+  deckHighlights?: string[];
 }
 
 export type CompetitorCategory =
@@ -522,6 +542,8 @@ export interface StatusResponse {
   hasMarketIntelligence: boolean;
   hasDiagnosis: boolean;
   companyName?: string;
+  /** The website the analysis is for (shown on the PDF) */
+  website?: string;
   messages?: ChatMessage[];
   /** Search Intel for the sidebar, once the analysis is ready */
   searchIntel?: SearchIntelView;

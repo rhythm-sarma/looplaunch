@@ -602,7 +602,7 @@ export function IntelligenceSidebar({ intel, companyName, sessionId, onAsk, isAs
                           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[12px] text-[#B4B4BC]">
                             <span>
                               {entry.firstShownAt && entry.lastShownAt
-                                ? `Shown ${fmtDate(entry.firstShownAt)} – ${fmtDate(entry.lastShownAt)}`
+                                ? `Shown ${fmtDate(entry.firstShownAt)} to ${fmtDate(entry.lastShownAt)}`
                                 : entry.lastShownAt
                                   ? `Last shown ${fmtDate(entry.lastShownAt)}`
                                   : "Dates not provided"}

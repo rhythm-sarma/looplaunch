@@ -3,7 +3,8 @@
  *
  * Main intelligence pipeline endpoint. Receives the onboarding answers and runs:
  * 1. Crawl the website (Crawl4AI, or the built-in fetch crawler)
- * 2. Business profile: what they sell, to whom, and where (Gemini, from the crawled pages)
+ * 2. Business profile: what they sell, to whom, and where (Gemini, from the crawled pages and
+ *    the optional pitch deck the founder uploaded)
  * 3. Search Intel research (src/lib/research/orchestrator.ts): competitors, competitor ads,
  *    Ad Library and buyer questions within the configured search budget, reusing cached results
  * 4. Market analysis, AI answers to the buyer questions and the strategic diagnosis, together
@@ -16,7 +17,8 @@
 import { NextResponse } from "next/server";
 import { rejectIfNoAccess } from "@/lib/auth/team-guard";
 import { getCurrentUser } from "@/lib/auth/supabase-server";
-import type { CrawlResult, GatherResponse, MarketIntelligence, OnboardingInput } from "@/lib/intelligence/types";
+import type { CrawlResult, GatherResponse, MarketIntelligence, OnboardingInput, PitchDeckUpload } from "@/lib/intelligence/types";
+import { cleanDeckText } from "@/lib/deck/extract";
 import { createSession, updateSession, updateStatus } from "@/lib/intelligence/store";
 import { crawlWebsite, crawlResultToText } from "@/lib/crawler/website-crawler";
 import { buildBusinessProfile } from "@/lib/ai/business-profiler";
@@ -49,11 +51,26 @@ function validateInput(body: unknown): OnboardingInput | null {
   };
 }
 
+/**
+ * The optional pitch deck sent with the answers (read by /api/intelligence/deck). Only its name
+ * and size go on the analysis; the text is read once, by the business profile, and not stored.
+ */
+function readPitchDeck(body: unknown): PitchDeckUpload | null {
+  const deck = (body as { pitchDeck?: unknown })?.pitchDeck as Partial<PitchDeckUpload> | null | undefined;
+  if (!deck || typeof deck !== "object" || typeof deck.text !== "string" || !deck.text.trim()) return null;
+  return {
+    fileName: String(deck.fileName || "Pitch deck").slice(0, 120),
+    pages: Math.max(0, Math.min(999, Math.round(Number(deck.pages) || 0))),
+    kind: deck.kind === "pptx" ? "pptx" : "pdf",
+    text: cleanDeckText(deck.text),
+  };
+}
+
 // ──────────────────────────────────────────────
 // Pipeline Orchestrator (runs asynchronously)
 // ──────────────────────────────────────────────
 
-async function runPipeline(sessionId: string, input: OnboardingInput) {
+async function runPipeline(sessionId: string, input: OnboardingInput, deckText?: string) {
   try {
     // ─── STAGE 1: Crawl the website ───
     await updateStatus(sessionId, "crawling_company", "Reading your website...");
@@ -68,7 +85,7 @@ async function runPipeline(sessionId: string, input: OnboardingInput) {
 
     // ─── STAGE 2: Business profile ───
     await updateStatus(sessionId, "analyzing_company", "Working out what you sell, to whom, and where...");
-    const companyIntel = await buildBusinessProfile(input, companyText);
+    const companyIntel = await buildBusinessProfile(input, companyText, deckText);
     companyIntel.rawCrawlData = companyCrawl;
     input.companyName = companyIntel.name;
     await updateSession(sessionId, { companyIntelligence: companyIntel, onboardingInput: input });
@@ -186,12 +203,15 @@ export async function POST(request: Request) {
       console.warn("[Pipeline] GEMINI_API_KEY is not set — pipeline will operate using contextual demo mode.");
     }
 
+    const deck = readPitchDeck(body);
+    if (deck) input.pitchDeck = { fileName: deck.fileName, pages: deck.pages, kind: deck.kind };
+
     // Create session and start pipeline asynchronously
     const user = await getCurrentUser();
     const session = await createSession(input, user?.id);
 
-    // Run pipeline in background (don't await — return immediately)
-    runPipeline(session.id, input).catch((e) => {
+    // Run pipeline in background (don't await: return immediately)
+    runPipeline(session.id, input, deck?.text).catch((e) => {
       console.error("[Pipeline] Unhandled error:", e);
     });
 

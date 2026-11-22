@@ -7,9 +7,12 @@ import { BriefPanel } from "./BriefPanel";
 import JellyRadio from "@/components/reactbits/JellyRadio";
 import SlideCommit from "@/components/reactbits/SlideCommit";
 import SpringCheck from "@/components/reactbits/SpringCheck";
+import { PitchDeckUpload } from "./PitchDeckUpload";
 import { useOnboarding } from "@/lib/onboarding/context";
 import {
   STEPS,
+  TOTAL_QUESTION_STEPS,
+  answerText,
   ROLE_OPTIONS,
   INDUSTRY_OPTIONS,
   STAGE_OPTIONS,
@@ -59,8 +62,9 @@ const MULTI_SELECT_OPTIONS: Record<string, string[]> = {
 };
 
 /**
- * The nine questions on the signed-in New analysis page (/new): each question on the left, the
- * visitor's brief filling in on the right, then a slide to start the research.
+ * The nine questions on the signed-in New analysis page (/new), then an optional pitch deck upload:
+ * each question on the left, the visitor's brief filling in on the right, then a slide to start
+ * the research.
  */
 export function QuestionFlow() {
   const router = useRouter();
@@ -272,9 +276,10 @@ export function QuestionFlow() {
   const isWebsiteStep = currentStep.key === "website";
   const isSingleSelectStep = currentStep.inputType === "singleselect";
   const isMultiSelectStep = currentStep.inputType === "multiselect";
+  const isUploadStep = currentStep.inputType === "upload";
   const isReviewStep = currentStep.key === "review";
   const isTextStep =
-    !isWebsiteStep && !isSingleSelectStep && !isMultiSelectStep && !isReviewStep;
+    !isWebsiteStep && !isSingleSelectStep && !isMultiSelectStep && !isUploadStep && !isReviewStep;
 
   // Get current single-select value
   const currentSingleVal = currentField
@@ -283,7 +288,7 @@ export function QuestionFlow() {
       : ""
     : "";
 
-  const questionNumber = Math.min(currentStepIndex + 1, STEPS.length - 1);
+  const questionNumber = Math.min(currentStepIndex + 1, TOTAL_QUESTION_STEPS);
 
   const stepHeading = (text: string) => (
     <h1
@@ -374,7 +379,7 @@ export function QuestionFlow() {
               errorLine("hero-website-error", websiteError)
             ) : (
               <p id="hero-website-note" className="mt-3 text-[15px] text-[#B4B4BC] pl-4">
-                Nine quick questions come next, then the research runs.
+                Nine quick questions and an optional pitch deck, then the research runs.
               </p>
             )}
           </div>
@@ -519,6 +524,29 @@ export function QuestionFlow() {
         </motion.div>
       )}
 
+      {/* PITCH DECK STEP (optional): drop or pick a PDF / .pptx; its text joins the answers */}
+      {isUploadStep && (
+        <motion.div key={`step-${currentStep.key}`} {...stepMotion} className="w-full">
+          {stepHeading(currentStep.heading)}
+          {stepSubtext(currentStep.subtext)}
+          <PitchDeckUpload value={data.pitchDeck} onChange={(deck) => updateField("pitchDeck", deck)} />
+          <div className="mt-6 flex items-center gap-4">
+            {data.pitchDeck ? (
+              <button onClick={goNext} className={primaryButton}>
+                Continue
+              </button>
+            ) : (
+              <button
+                onClick={goNext}
+                className="inline-flex items-center justify-center h-11 px-6 rounded-full text-[15px] font-medium bg-[#1C1C21] text-[#E4E4E7] hover:bg-[#232329] hover:text-white active:scale-[0.98] transition cursor-pointer"
+              >
+                {currentStep.skipLabel || "Skip"}
+              </button>
+            )}
+          </div>
+        </motion.div>
+      )}
+
       {/* REVIEW STEP: React Bits SlideCommit, slide to start the research (it runs paid searches, so it asks for intent) */}
       {isReviewStep && (
         <motion.div key="step-review" {...stepMotion} className="w-full">
@@ -529,16 +557,17 @@ export function QuestionFlow() {
             {STEPS.slice(0, -1).map((step, idx) => {
               const fieldKey = step.field;
               if (!fieldKey) return null;
-              const raw = data[fieldKey];
-              const val = Array.isArray(raw) ? raw.join(", ") : raw;
+              const val = answerText(data, fieldKey);
               return (
                 <div key={step.key} className="px-4 py-3 rounded-xl bg-[#141418] border border-[#27272A] flex items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-[13px] text-[#8B8B94] truncate">{step.heading}</p>
-                    <p className="text-[15px] text-[#F4F4F5] truncate">{val || <span className="text-[#8B8B94]">Not answered</span>}</p>
+                    <p className="text-[13px] text-[#8B8B94] truncate">{step.key === "pitchDeck" ? "Pitch deck (optional)" : step.heading}</p>
+                    <p className="text-[15px] text-[#F4F4F5] truncate">
+                      {val || <span className="text-[#8B8B94]">{step.optional ? "Not added" : "Not answered"}</span>}
+                    </p>
                   </div>
                   <button onClick={() => goToStep(idx)} className="link-quiet text-[14px] text-[#B4B4BC] hover:text-white px-2 py-1 cursor-pointer">
-                    Edit
+                    {step.optional && !val ? "Add" : "Edit"}
                   </button>
                 </div>
               );
@@ -578,7 +607,11 @@ export function QuestionFlow() {
         <span>Back</span>
       </button>
       <p className="text-[14px] text-[#B4B4BC] tabular-nums">
-        {currentStep.key === "review" ? "Review your answers" : `Question ${questionNumber} of ${STEPS.length - 1}`}
+        {currentStep.key === "review"
+          ? "Review your answers"
+          : currentStep.optional
+            ? "Optional extra"
+            : `Question ${questionNumber} of ${TOTAL_QUESTION_STEPS}`}
       </p>
     </div>
   );

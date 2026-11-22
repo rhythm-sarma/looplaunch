@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { motion, AnimatePresence, MotionConfig } from "motion/react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Copy, ExternalLink, ChevronRight, RotateCcw, Network, Lock, X } from "lucide-react";
+import { Copy, Download, ExternalLink, ChevronRight, RotateCcw, Network, Lock, X } from "lucide-react";
 import type {
   StatusResponse,
   PipelineStatus,
@@ -424,6 +424,40 @@ function IntelligencePageContent() {
   const mindMapMsg = mindMapIndex !== null ? messages[mindMapIndex] : undefined;
   const mindMapData = mindMapMsg ? parseMindMap(mindMapMsg.content, `${companyName} plan`) : null;
 
+  // "Download PDF": the answer, what it's based on, and its mind map at the end. pdf-lib and the
+  // fonts load only when someone asks (src/lib/intelligence/download-pdf.ts).
+  const [pdfIndex, setPdfIndex] = useState<number | null>(null);
+  const downloadPdf = async (index: number) => {
+    const msg = messages[index];
+    if (!msg || pdfIndex !== null) return;
+    const asked = messages.slice(0, index).findLast((m) => m.role === "user");
+    const builtIn = asked ? autoPromptLabel(asked.content) : null;
+    setPdfIndex(index);
+    try {
+      const { downloadAnalysisPdf } = await import("@/lib/intelligence/download-pdf");
+      await downloadAnalysisPdf(
+        {
+          companyName,
+          website: status?.website,
+          title: builtIn ? `Your ${builtIn} for ${companyName}` : `Loopy's answer for ${companyName}`,
+          question: builtIn ? undefined : asked?.content,
+          content: msg.content,
+          evidence: msg.evidence,
+          sources: msg.sources,
+          mindMap: parseMindMap(msg.content, `${companyName} plan`),
+          createdAt: msg.timestamp ? new Date(msg.timestamp) : new Date(),
+        },
+        builtIn || "answer"
+      );
+      toast("PDF downloaded", { description: "Your plan is in your downloads, with its mind map on the last page." });
+    } catch (err) {
+      console.error("[PDF] Couldn't make the PDF:", err);
+      toast("Couldn't make the PDF", { description: "Please try again. If it keeps failing, copy the answer instead.", tone: "error" });
+    } finally {
+      setPdfIndex(null);
+    }
+  };
+
   // ─── No Session ID Fallback ───
   if (!sessionId) {
     return (
@@ -787,12 +821,30 @@ function IntelligencePageContent() {
                           </div>
                         )}
 
-                        {/* Mind map + suggested next questions */}
+                        {/* Mind map, PDF download + suggested next questions */}
                         <div className="mt-5 space-y-3">
-                          <button type="button" onClick={() => setMindMapIndex(index)} className={SECONDARY_INLINE}>
-                            <Network className="w-4 h-4 text-[#B4B4BC]" aria-hidden="true" />
-                            See it as a mind map
-                          </button>
+                          <div className="flex flex-wrap gap-2">
+                            <button type="button" onClick={() => setMindMapIndex(index)} className={SECONDARY_INLINE}>
+                              <Network className="w-4 h-4 text-[#B4B4BC]" aria-hidden="true" />
+                              See it as a mind map
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => downloadPdf(index)}
+                              disabled={pdfIndex !== null}
+                              aria-busy={pdfIndex === index}
+                              className={`${SECONDARY_INLINE} disabled:opacity-60 disabled:cursor-progress`}
+                            >
+                              {pdfIndex === index ? (
+                                <span className="w-4 h-4 border-2 border-[#B4B4BC] border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+                              ) : (
+                                <Download className="w-4 h-4 text-[#B4B4BC]" aria-hidden="true" />
+                              )}
+                              <span key={pdfIndex === index ? "busy" : "idle"} className="ll-swap">
+                                {pdfIndex === index ? "Making your PDF…" : "Download PDF"}
+                              </span>
+                            </button>
+                          </div>
 
                           {isLatest && (
                             <div>

@@ -3,8 +3,12 @@
  * This object is collected during onboarding and will eventually
  * be sent to the backend analysis pipeline.
  *
- * Updated to match founder's 9-question spec (Oct 2026).
+ * Updated to match founder's 9-question spec (Oct 2026), plus an optional pitch deck (Nov 2026).
  */
+import type { PitchDeckUpload } from "@/lib/intelligence/types";
+
+export type { PitchDeckUpload };
+
 export interface OnboardingData {
   /** Q1: Website or primary page URL */
   website: string;
@@ -24,6 +28,8 @@ export interface OnboardingData {
   biggestHeadache: string;
   /** Q9: What do you want in the next 30 days? (single-select) */
   thirtyDayGoal: string;
+  /** Optional extra: a pitch deck or company PDF, with the text /api/intelligence/deck read from it */
+  pitchDeck: PitchDeckUpload | null;
 }
 
 export const EMPTY_ONBOARDING: OnboardingData = {
@@ -36,7 +42,16 @@ export const EMPTY_ONBOARDING: OnboardingData = {
   salesChannels: [],
   biggestHeadache: "",
   thirtyDayGoal: "",
+  pitchDeck: null,
 };
+
+/** An answer as one line of text, for the review list and the brief. */
+export function answerText(data: OnboardingData, field: keyof OnboardingData): string {
+  const value = data[field];
+  if (Array.isArray(value)) return value.join(", ");
+  if (value && typeof value === "object") return `${value.fileName} (${value.pages} ${value.kind === "pptx" ? "slide" : "page"}${value.pages === 1 ? "" : "s"})`;
+  return value || "";
+}
 
 // ──────────────────────────────────────────────
 // Option arrays for select-based questions
@@ -117,6 +132,7 @@ export type StepKey =
   | "salesChannels"
   | "biggestHeadache"
   | "thirtyDayGoal"
+  | "pitchDeck"
   | "review";
 
 export interface StepConfig {
@@ -127,7 +143,7 @@ export interface StepConfig {
   subtext: string;
   placeholder?: string;
   /** Input rendering type */
-  inputType: "text" | "textarea" | "singleselect" | "multiselect";
+  inputType: "text" | "textarea" | "singleselect" | "multiselect" | "upload";
   /** For multiselect: max number of selections allowed (undefined = unlimited) */
   maxSelections?: number;
   optional?: boolean;
@@ -213,12 +229,24 @@ export const STEPS: StepConfig[] = [
     inputType: "singleselect",
   },
   {
-    key: "review",
+    key: "pitchDeck",
     number: 10,
+    field: "pitchDeck",
+    heading: "Got a pitch deck? Add it for a sharper plan.",
+    subtext:
+      "Optional. Loopy reads it alongside your website, so the plan fits your customers, your numbers and your goals.",
+    inputType: "upload",
+    optional: true,
+    skipLabel: "Skip this step",
+  },
+  {
+    key: "review",
+    number: 11,
     heading: "Here's what we have so far.",
     subtext: "Review your answers and edit anything you'd like to change.",
     inputType: "text", // unused for review
   },
 ];
 
-export const TOTAL_QUESTION_STEPS = STEPS.length - 1; // exclude review
+/** The nine questions; the pitch deck is an optional extra and the review isn't a question. */
+export const TOTAL_QUESTION_STEPS = STEPS.filter((s) => s.key !== "review" && !s.optional).length;

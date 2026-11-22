@@ -5,9 +5,12 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import SideRays from "@/components/ui/SideRays";
 import { Mascot } from "@/components/onboarding/Mascot";
+import { PitchDeckUpload } from "@/components/onboarding/PitchDeckUpload";
 import { useOnboarding } from "@/lib/onboarding/context";
 import {
   STEPS,
+  TOTAL_QUESTION_STEPS,
+  answerText,
   ROLE_OPTIONS,
   INDUSTRY_OPTIONS,
   STAGE_OPTIONS,
@@ -245,9 +248,10 @@ export function HeroSection({ variant = "landing" }: HeroSectionProps) {
   const isWebsiteStep = currentStep.key === "website";
   const isSingleSelectStep = currentStep.inputType === "singleselect";
   const isMultiSelectStep = currentStep.inputType === "multiselect";
+  const isUploadStep = currentStep.inputType === "upload";
   const isReviewStep = currentStep.key === "review";
   const isTextStep =
-    !isWebsiteStep && !isSingleSelectStep && !isMultiSelectStep && !isReviewStep;
+    !isWebsiteStep && !isSingleSelectStep && !isMultiSelectStep && !isUploadStep && !isReviewStep;
 
   // Get current single-select value
   const currentSingleVal = currentField
@@ -307,7 +311,11 @@ export function HeroSection({ variant = "landing" }: HeroSectionProps) {
               <span>Back</span>
             </button>
             <div className="text-xs font-mono text-[#8B5CF6] tracking-wider uppercase font-semibold">
-              {currentStep.key === "review" ? "Review" : `Step ${currentStepIndex + 1} of ${STEPS.length - 1}`}
+              {currentStep.key === "review"
+                ? "Review"
+                : currentStep.optional
+                  ? "Optional"
+                  : `Step ${currentStepIndex + 1} of ${TOTAL_QUESTION_STEPS}`}
             </div>
           </div>
         )}
@@ -665,6 +673,46 @@ export function HeroSection({ variant = "landing" }: HeroSectionProps) {
           )}
 
           {/* ═══════════════════════════════════════════ */}
+          {/* PITCH DECK STEP (optional upload) */}
+          {/* ═══════════════════════════════════════════ */}
+          {isUploadStep && (
+            <motion.div
+              key={`step-${currentStep.key}`}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="w-full flex flex-col items-center"
+            >
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-normal tracking-tight text-text-primary mb-3 leading-[1.15]">
+                {currentStep.heading}
+              </h1>
+              <p className="text-text-secondary text-sm sm:text-base max-w-lg mb-8 leading-relaxed font-normal">
+                {currentStep.subtext}
+              </p>
+              <PitchDeckUpload value={data.pitchDeck} onChange={(deck) => updateField("pitchDeck", deck)} />
+              <div className="flex items-center justify-center gap-3 mt-6">
+                {data.pitchDeck ? (
+                  <button
+                    onClick={goNext}
+                    className="px-6 py-2.5 rounded-xl text-sm font-medium bg-[#8B5CF6] text-white hover:bg-[#7C3AED] active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <span>Continue</span>
+                    <span>&rarr;</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={goNext}
+                    className="px-6 py-2.5 rounded-xl text-sm font-medium bg-bg-surface border border-border-subtle text-text-secondary hover:text-text-primary hover:border-[#8B5CF6]/40 active:scale-95 transition-all cursor-pointer"
+                  >
+                    {currentStep.skipLabel || "Skip"}
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* ═══════════════════════════════════════════ */}
           {/* REVIEW STEP */}
           {/* ═══════════════════════════════════════════ */}
           {isReviewStep && (
@@ -688,8 +736,7 @@ export function HeroSection({ variant = "landing" }: HeroSectionProps) {
                 {STEPS.slice(0, -1).map((step, idx) => {
                   const fieldKey = step.field;
                   if (!fieldKey) return null;
-                  const raw = data[fieldKey];
-                  const val = Array.isArray(raw) ? raw.join(", ") : raw;
+                  const val = answerText(data, fieldKey);
                   return (
                     <div
                       key={step.key}

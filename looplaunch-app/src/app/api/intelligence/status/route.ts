@@ -16,6 +16,7 @@ import { canUseSession } from "@/lib/auth/session-access";
 import { getSignedInClaims } from "@/lib/auth/supabase-server";
 import { buildSearchIntelView, validateSearchIntelView } from "@/lib/intelligence/search-intel";
 import { isStrategyPending } from "@/lib/intelligence/pending";
+import { humanizeMessage } from "@/lib/intelligence/humanize";
 import type { StatusResponse } from "@/lib/intelligence/types";
 
 export async function GET(request: Request) {
@@ -56,7 +57,9 @@ export async function GET(request: Request) {
     hasMarketIntelligence: !!session.marketIntelligence,
     hasDiagnosis: !!session.diagnosis,
     companyName: session.onboardingInput?.companyName || session.companyIntelligence?.name,
-    messages: signedIn ? session.messages || [] : [],
+    website: session.onboardingInput?.website || session.companyIntelligence?.website,
+    // Answers saved before the no-em-dash rule are cleaned on the way out.
+    messages: signedIn ? (session.messages || []).map(humanizeMessage) : [],
     searchIntel,
     locked: !signedIn && session.status === "ready",
     strategyPending: isStrategyPending(session.id),
