@@ -3,6 +3,7 @@
  * See .env.example for each variable. Only the yes/no flags from calendarFeatures() reach the browser.
  */
 
+import { emailSender } from "@/lib/email/brevo";
 import { getSiteUrl } from "@/lib/seo";
 import { tokenKeyFromEnv } from "./crypto";
 import type { GoogleClient } from "./google";
@@ -19,20 +20,6 @@ export function googleClient(): GoogleClient | null {
   const clientSecret = env("GOOGLE_CALENDAR_CLIENT_SECRET");
   if (!clientId || !clientSecret) return null;
   return { clientId, clientSecret, redirectUri: env("GOOGLE_CALENDAR_REDIRECT_URI") || `${getSiteUrl()}/oauth/callback` };
-}
-
-export interface EmailSender {
-  apiKey: string;
-  fromEmail: string;
-  fromName: string;
-}
-
-/** Brevo (already our email provider). The from address must be a verified sender in Brevo. */
-export function emailSender(): EmailSender | null {
-  const apiKey = env("BREVO_API_KEY");
-  const fromEmail = env("AGENDA_EMAIL_FROM");
-  if (!apiKey || !fromEmail) return null;
-  return { apiKey, fromEmail, fromName: env("AGENDA_EMAIL_FROM_NAME") || "Loop Launch" };
 }
 
 export interface WhatsAppSender {

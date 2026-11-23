@@ -3,7 +3,7 @@
  * events, the test send, the morning send for everyone, and disconnecting.
  */
 
-import { getSupabase } from "@/lib/db/supabase";
+import { accountEmail } from "@/lib/email/brevo";
 import { agendaItems, agendaText, dayWindow, isDue, safeTimeZone, type Agenda } from "./agenda";
 import { calendarFeatures, googleClient, manageUrl } from "./config";
 import { decryptToken, encryptToken, tokenKeyFromEnv } from "./crypto";
@@ -132,12 +132,6 @@ export async function sendTestAgenda(userId: string, accountEmail: string | null
     console.error(`[Calendar] Sending a test by ${stored.channel} failed:`, message(error));
     return { ok: false, error: "failed", message: `Your agenda is ready, but sending it by ${stored.channel} failed.`, preview };
   }
-}
-
-async function accountEmail(userId: string): Promise<string | null> {
-  const { data, error } = (await getSupabase()?.auth.admin.getUserById(userId)) ?? { data: null, error: null };
-  if (error) console.warn("[Calendar] Looking up an account email failed:", error.message);
-  return data?.user?.email ?? null;
 }
 
 export interface DailyRunSummary {

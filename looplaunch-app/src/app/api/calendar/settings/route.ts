@@ -1,16 +1,24 @@
 /**
- * POST /api/calendar/settings
- *
- * Body: { sendHour: number, channel: "email" | "whatsapp", whatsapp?: string }
- * Saves when and how the signed-in person gets their daily agenda.
+ * GET  /api/calendar/settings   The signed-in person's calendar connection, as Settings shows it (no tokens).
+ * POST /api/calendar/settings   Body: { sendHour: number, channel: "email" | "whatsapp", whatsapp?: string }
+ *                               Saves when and how they get their daily agenda.
  */
 
 import { NextResponse } from "next/server";
 import { getSignedInClaims } from "@/lib/auth/supabase-server";
 import { rejectIfNoAccess } from "@/lib/auth/team-guard";
 import { calendarFeatures } from "@/lib/calendar/config";
+import { getCalendarSettings } from "@/lib/calendar/service";
 import { updatePreferences } from "@/lib/calendar/store";
 import { cleanWhatsapp } from "@/lib/waitlist/details";
+
+export async function GET() {
+  const claims = await getSignedInClaims();
+  if (!claims) return NextResponse.json({ error: "You're not logged in." }, { status: 401 });
+  const denied = await rejectIfNoAccess();
+  if (denied) return denied;
+  return NextResponse.json(await getCalendarSettings(claims.userId));
+}
 
 export async function POST(request: Request) {
   const claims = await getSignedInClaims();

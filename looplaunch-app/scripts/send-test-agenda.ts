@@ -19,7 +19,7 @@ async function main() {
   }
 
   // Imported after the environment is loaded, since config reads it.
-  const { emailSender } = await import("../src/lib/calendar/config");
+  const { emailSender } = await import("../src/lib/email/brevo");
   const { sendAgendaEmail } = await import("../src/lib/calendar/deliver");
   const { agendaSubject, dayWindow } = await import("../src/lib/calendar/agenda");
 

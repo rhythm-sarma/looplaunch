@@ -10,7 +10,10 @@ import type {
   PipelineStatus,
   ChatMessage,
 } from "@/lib/intelligence/types";
+import { AnalysisMenu, type StrategyAnswer } from "@/components/intelligence/AnalysisMenu";
+import { useMenuDocked } from "@/components/intelligence/menu-docked";
 import { MindMapDialog, parseMindMap } from "@/components/intelligence/MindMap";
+import { latestPlan } from "@/lib/plan-email/plan";
 import { MarkdownContent } from "@/components/intelligence/MarkdownContent";
 import { IntelligenceSidebar } from "@/components/intelligence/IntelligenceSidebar";
 import { LoopyMascot } from "@/components/loopy/LoopyMascot";
@@ -150,6 +153,8 @@ function IntelligencePageContent() {
   const [loginOpen, setLoginOpen] = useState(false);
   const [resultsPromptDismissed, setResultsPromptDismissed] = useState(false);
   const [loginReason, setLoginReason] = useState<"results" | "chat" | "intel">("chat");
+  // The ☰ sidebar's open state on wide screens: the page makes room for it.
+  const [menuDocked] = useMenuDocked();
   const askToLogIn = (reason: "results" | "chat" | "intel") => {
     setLoginReason(reason);
     setLoginOpen(true);
@@ -370,6 +375,20 @@ function IntelligencePageContent() {
   const resultsPromptOpen = isReady && locked && !resultsPromptDismissed;
 
   const has14Day = messages.some((m) => m.role === "user" && autoPromptLabel(m.content) === "14-day strategy");
+
+  // The strategies on this page, for the ☰ menu (PDF, daily emails, mind map). A strategy still being
+  // written doesn't count yet. Older analyses fall back to the newest answer with a day-by-day plan.
+  const strategies: StrategyAnswer[] = messages.flatMap((m, i) => {
+    if (m.role !== "assistant" || m.id === latestStreamingMsgId) return [];
+    const asked = messages.slice(0, i).findLast((x) => x.role === "user");
+    const label = asked ? autoPromptLabel(asked.content) : null;
+    return label ? [{ index: i, label }] : [];
+  });
+  if (!strategies.length) {
+    const plan = latestPlan(messages.filter((m) => m.id !== latestStreamingMsgId));
+    if (plan) strategies.push({ index: plan.index, label: "strategy" });
+  }
+
   // Nothing about the analysis is known until the first status answers: show a quiet loader, not
   // the research wait screen (a finished analysis would flash "Researching Company" first).
   const loaded = status !== null || Boolean(error);
@@ -487,8 +506,18 @@ function IntelligencePageContent() {
     <div className="min-h-svh bg-[#09090B] text-[#F4F4F5] flex flex-col font-sans selection:bg-[#8B5CF6]/20 selection:text-[#F4F4F5]">
       {/* ─── Header ─── */}
       <header className="sticky top-0 z-40 h-14 bg-[#09090B] border-b border-[#1C1C21]" style={APP_HEADER_STYLE}>
-        <div className="h-full mx-auto max-w-[1148px] px-4 sm:px-6 flex items-center justify-between gap-4">
+        {/* Wide screens: edge to edge, so ☰ sits right above the sidebar it opens and closes */}
+        <div className="h-full mx-auto max-w-[1148px] xl:max-w-none px-4 sm:px-6 xl:px-5 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2 min-w-0">
+          <AnalysisMenu
+            sessionId={sessionId}
+            companyName={companyName}
+            strategies={strategies}
+            pdfIndex={pdfIndex}
+            onDownloadPdf={downloadPdf}
+            onOpenMindMap={setMindMapIndex}
+            onNeedLogin={() => askToLogIn("results")}
+          />
           <LogoMenu
             wordmarkClassName="hidden sm:block"
             note={
@@ -539,7 +568,9 @@ function IntelligencePageContent() {
         </div>
       </header>
 
-      {/* ─── Main Content Container ─── (each state rises in as it lands: .ll-page) */}
+      {/* ─── Main Content Container ─── (each state rises in as it lands: .ll-page)
+          Wide screens with the ☰ sidebar open: everything moves over by its width (SIDEBAR_WIDTH, 272px). */}
+      <div className={`flex-1 flex flex-col transition-[padding] duration-300 ease-out ${menuDocked ? "xl:pl-[272px]" : ""}`}>
       <main className="ll-page relative flex-1 flex flex-col w-full max-w-[1148px] mx-auto px-4 sm:px-6">
         {!loaded && (
           // Only shows if the first status takes a moment; a quick answer goes straight to the right screen.
@@ -930,10 +961,15 @@ function IntelligencePageContent() {
           </div>
         )}
       </main>
+      </div>
 
       {/* ─── Sticky Bottom Question Input Bar ─── */}
       {showConversation && (
-        <div className="ll-bar-in fixed bottom-0 left-0 right-0 z-30 bg-[#09090B] border-t border-[#1C1C21] px-4 py-3">
+        <div
+          className={`ll-bar-in fixed bottom-0 left-0 right-0 z-30 bg-[#09090B] border-t border-[#1C1C21] px-4 py-3 transition-[left] duration-300 ease-out ${
+            menuDocked ? "xl:left-[272px]" : ""
+          }`}
+        >
           <div className="max-w-3xl mx-auto w-full">
             {error && (
               <div role="alert" className="mb-2 pl-3.5 pr-1.5 py-1.5 rounded-xl bg-[#1C1C21] text-[13px] text-[#F87171] flex items-center justify-between gap-2">

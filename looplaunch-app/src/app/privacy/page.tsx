@@ -46,6 +46,10 @@ export default function PrivacyPage() {
             strategies we generate, and your chats with Loopy.
           </li>
           <li>
+            <strong>Daily plan emails, only if you turn them on.</strong> The steps of the plan you chose, your time zone and
+            the hour you want them, so we can email you one step each morning.
+          </li>
+          <li>
             <strong>Google Calendar, only if you connect it.</strong> If you connect Google Calendar for your daily agenda, we
             get read-only access to your calendar events and the email address of the Google account you connected. We store
             an encrypted access token, your calendar&apos;s time zone, and when and how you want your agenda (email, or
@@ -63,6 +67,7 @@ export default function PrivacyPage() {
       <LegalSection title="2. How we use it">
         <ul>
           <li>To run Loop Launch: research your market, write your strategies, save them to your account and answer your questions.</li>
+          <li>If you turn on daily plan emails, to email you one step of your plan each morning until the plan ends or you stop them.</li>
           <li>
             If you connect Google Calendar, to send you each day&apos;s agenda by email or WhatsApp at the time you choose,
             and to show you a preview of it in Settings.
@@ -82,7 +87,7 @@ export default function PrivacyPage() {
             <strong>Google:</strong> Google sign-in, Google Calendar (if you connect it), and the Gemini AI models that read
             your website and answers to write your analysis and replies. Your calendar data is never sent to Gemini.
           </li>
-          <li><strong>Brevo:</strong> delivering our emails, including your daily agenda if you get it by email.</li>
+          <li><strong>Brevo:</strong> delivering our emails, including your daily plan emails and your daily agenda if you get it by email.</li>
           <li><strong>Meta (WhatsApp):</strong> delivering your daily agenda, only if you choose to get it on WhatsApp.</li>
           <li>
             <strong>SerpApi and Tavily:</strong> web searches about your business, market and competitors. We send them search

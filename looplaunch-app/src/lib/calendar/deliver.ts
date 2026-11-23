@@ -3,8 +3,9 @@
  * Each is off until its keys are in the environment (see config.ts).
  */
 
+import { sendEmail } from "@/lib/email/brevo";
 import { agendaHtml, agendaOneLine, agendaSubject, agendaText, type Agenda } from "./agenda";
-import { emailSender, manageUrl, whatsappSender } from "./config";
+import { manageUrl, whatsappSender } from "./config";
 import type { AgendaChannel } from "./types";
 
 export type Delivery =
@@ -17,24 +18,8 @@ async function failure(service: string, res: Response): Promise<Error> {
 }
 
 export async function sendAgendaEmail(to: string, agenda: Agenda): Promise<boolean> {
-  const sender = emailSender();
-  if (!sender) return false;
   const link = manageUrl();
-  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
-    method: "POST",
-    headers: { "api-key": sender.apiKey, "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({
-      sender: { email: sender.fromEmail, name: sender.fromName },
-      to: [{ email: to }],
-      subject: agendaSubject(agenda),
-      htmlContent: agendaHtml(agenda, link),
-      textContent: agendaText(agenda, link),
-      tags: ["daily-agenda"],
-    }),
-    cache: "no-store",
-  });
-  if (!res.ok) throw await failure("Brevo", res);
-  return true;
+  return sendEmail({ to, subject: agendaSubject(agenda), html: agendaHtml(agenda, link), text: agendaText(agenda, link), tag: "daily-agenda" });
 }
 
 /**
