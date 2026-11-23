@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "ingest:frameworks": "tsx scripts/ingest-frameworks.ts",
+    "agenda:test-email": "tsx scripts/send-test-agenda.ts",
     "test": "node --import tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {

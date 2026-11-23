@@ -11,6 +11,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseServerClient, getCurrentUser } from "@/lib/auth/supabase-server";
 import { getSupabase } from "@/lib/db/supabase";
 import { deleteSessionsForUser } from "@/lib/intelligence/store";
+import { disconnectCalendar } from "@/lib/calendar/service";
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as { confirm?: string };
@@ -29,10 +30,13 @@ export async function POST(request: Request) {
   }
 
   // Analyses go before the login: once it's deleted they'd lose their owner and become anonymous.
-  const [sessionsDeleted, waitlist] = await Promise.all([
+  // A Google Calendar connection is revoked at Google too (the table row would go with the login anyway).
+  const [sessionsDeleted, waitlist, calendarRemoved] = await Promise.all([
     deleteSessionsForUser(user.id),
     user.email ? admin.from("waitlist").delete().eq("email", user.email.toLowerCase()) : null,
+    disconnectCalendar(user.id).catch(() => false),
   ]);
+  if (!calendarRemoved) console.warn("[Account] Google Calendar disconnect failed; the row is removed with the login.");
   if (waitlist?.error) console.warn("[Account] Waitlist cleanup failed:", waitlist.error.message);
   if (!sessionsDeleted) {
     return NextResponse.json({ error: "Couldn't delete your analyses. Your account is still there; please try again." }, { status: 500 });

@@ -1,11 +1,21 @@
 import { AppNav } from "@/components/app/AppNav";
 import { PageTransition } from "@/components/app/PageTransition";
 import { AccountSettings } from "@/components/profile/AccountSettings";
+import { CalendarSettings } from "@/components/profile/CalendarSettings";
 import { ProfileForm } from "@/components/profile/ProfileForm";
 import type { ProfileInfo } from "@/lib/auth/profile";
+import type { CalendarSettingsData } from "@/lib/calendar/types";
 
-/** Settings: the profile and business details, then sign-in, log out and deleting the account. */
-export function SettingsView({ profile, pendingEmail }: { profile: ProfileInfo; pendingEmail?: string }) {
+interface SettingsViewProps {
+  profile: ProfileInfo;
+  pendingEmail?: string;
+  calendar: CalendarSettingsData;
+  /** ?calendar= from the Google Calendar connection, to show its result once */
+  calendarNotice?: string;
+}
+
+/** Settings: the profile and business details, the daily agenda, then sign-in, log out and deleting the account. */
+export function SettingsView({ profile, pendingEmail, calendar, calendarNotice }: SettingsViewProps) {
   return (
     <PageTransition>
     <div className="min-h-svh bg-[#09090B] text-[#F4F4F5]">
@@ -13,9 +23,10 @@ export function SettingsView({ profile, pendingEmail }: { profile: ProfileInfo; 
       <main className="ll-page mx-auto max-w-[1148px] px-4 sm:px-6 pt-10 sm:pt-14 pb-20">
         <header className="mb-8">
           <h1 className="text-[26px] sm:text-[30px] leading-tight font-semibold tracking-[-0.02em]">Settings</h1>
-          <p className="mt-2 text-[16px] leading-6 text-[#B4B4BC]">Your profile, how you log in, and your account.</p>
+          <p className="mt-2 text-[16px] leading-6 text-[#B4B4BC]">Your profile, your daily agenda, how you log in, and your account.</p>
         </header>
         <ProfileForm profile={profile} />
+        <CalendarSettings data={calendar} notice={calendarNotice} accountEmail={profile.email} />
         <AccountSettings
           email={profile.email}
           pendingEmail={pendingEmail}
