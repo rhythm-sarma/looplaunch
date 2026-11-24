@@ -12,10 +12,13 @@ import { getSession, updateSession } from "@/lib/intelligence/store";
 import { canUseSession } from "@/lib/auth/session-access";
 import { getSignedInClaims } from "@/lib/auth/supabase-server";
 import { answerBuyerQuestion } from "@/lib/ai/gemini";
+import { rejectIfTooMany } from "@/lib/security/rate-limit";
 
 export async function POST(request: Request) {
   const denied = await rejectIfNoAccess();
   if (denied) return denied;
+  const limited = rejectIfTooMany(request, "quickAnswer", (await getSignedInClaims())?.userId);
+  if (limited) return limited;
 
   if (!(await getSignedInClaims())) {
     return NextResponse.json({ error: "Log in to see the answers.", loginRequired: true }, { status: 401 });

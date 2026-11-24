@@ -63,7 +63,8 @@ export async function GET(request: Request) {
     searchIntel,
     locked: !signedIn && session.status === "ready",
     strategyPending: isStrategyPending(session.id),
-    error: session.error,
+    // The real error stays in the server log and the database; the browser gets a plain sentence.
+    error: session.error ? "The research stopped partway. Please start a new analysis, or try again in a few minutes." : undefined,
   };
 
   return NextResponse.json(response);

@@ -26,10 +26,13 @@ import type {
   ChatMessage,
   TavilySearchResult,
 } from "@/lib/intelligence/types";
+import { rejectIfTooMany } from "@/lib/security/rate-limit";
 
 export async function POST(request: Request) {
   const denied = await rejectIfNoAccess();
   if (denied) return denied;
+  const limited = rejectIfTooMany(request, "ask", (await getSignedInClaims())?.userId);
+  if (limited) return limited;
 
   try {
     const body = (await request.json()) as Partial<StrategicQuestion>;

@@ -10,16 +10,19 @@ import { NextResponse } from "next/server";
 import { getSignedInClaims } from "@/lib/auth/supabase-server";
 import { rejectIfNoAccess } from "@/lib/auth/team-guard";
 import { sendTestAgenda } from "@/lib/calendar/service";
+import { rejectIfTooMany } from "@/lib/security/rate-limit";
 
 /** One test per person every 30 seconds, so a held-down button can't flood an inbox. */
 const lastTest = new Map<string, number>();
 const COOLDOWN_MS = 30_000;
 
-export async function POST() {
+export async function POST(request: Request) {
   const claims = await getSignedInClaims();
   if (!claims) return NextResponse.json({ error: "You're not logged in." }, { status: 401 });
   const denied = await rejectIfNoAccess();
   if (denied) return denied;
+  const limited = rejectIfTooMany(request, "email", claims.userId);
+  if (limited) return limited;
 
   const now = Date.now();
   if (now - (lastTest.get(claims.userId) ?? 0) < COOLDOWN_MS) {

@@ -30,32 +30,22 @@ import { cleanBrandLink, cleanIndustry, cleanRole, cleanWhatsapp, parseDetails }
 import { cleanFirstName, isBlockedName } from "@/lib/waitlist/names";
 import { parseRun, replay } from "@/lib/waitlist/snake";
 import type { JoinResponse } from "@/lib/waitlist/types";
+import { LIMITS, clientAddress, takeToken } from "@/lib/security/rate-limit";
 
 const WAITLIST_TABLE = "waitlist";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const MAX_EMAIL_LENGTH = 254;
 
-// A light per-IP limit so one script can't flood the table. In memory, so it resets on deploy.
-const RATE_LIMIT = 5;
-const RATE_WINDOW_MS = 60 * 1000;
-const recentRequests = new Map<string, number[]>();
-
-function isRateLimited(ip: string): boolean {
-  const now = Date.now();
-  const recent = (recentRequests.get(ip) ?? []).filter((time) => now - time < RATE_WINDOW_MS);
-  recent.push(now);
-  recentRequests.set(ip, recent);
-  return recent.length > RATE_LIMIT;
-}
 
 const badRequest = (error: string) => NextResponse.json({ error }, { status: 400 });
 
 let warnedNotSetUp = false;
 
 export async function POST(request: Request) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
-  if (isRateLimited(ip)) {
-    return NextResponse.json({ error: "Too many tries. Please wait a minute." }, { status: 429 });
+  // 5 a minute per visitor, by the address Cloudflare reports (a script can't fake a new one each time).
+  const limited = takeToken(`waitlist:${clientAddress(request)}`, LIMITS.waitlist);
+  if (!limited.ok) {
+    return NextResponse.json({ error: "Too many tries. Please wait a minute." }, { status: 429, headers: { "Retry-After": String(limited.retryAfterSec) } });
   }
 
   const body = (await request.json().catch(() => ({}))) as {

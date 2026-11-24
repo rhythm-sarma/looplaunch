@@ -9,10 +9,14 @@
 import { NextResponse } from "next/server";
 import { rejectIfNoAccess } from "@/lib/auth/team-guard";
 import { DeckError, MAX_DECK_BYTES, readDeck } from "@/lib/deck/extract";
+import { rejectIfTooMany } from "@/lib/security/rate-limit";
+import { getSignedInClaims } from "@/lib/auth/supabase-server";
 
 export async function POST(request: Request) {
   const denied = await rejectIfNoAccess();
   if (denied) return denied;
+  const limited = rejectIfTooMany(request, "deck", (await getSignedInClaims())?.userId);
+  if (limited) return limited;
 
   // Refuse an oversized body before reading it, when the browser says how big it is.
   const declared = Number(request.headers.get("content-length") || 0);

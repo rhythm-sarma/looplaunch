@@ -15,6 +15,7 @@ import { getSession, updateSession } from "@/lib/intelligence/store";
 import type { ContentIntel } from "@/lib/intelligence/types";
 import { runContentResearch } from "@/lib/research/content";
 import { marketFromStored } from "@/lib/research/market";
+import { rejectIfTooMany } from "@/lib/security/rate-limit";
 
 /** After a run that found nothing, wait this long before searching again. */
 const RETRY_AFTER_MS = 10 * 60 * 1000;
@@ -32,7 +33,8 @@ const hasAnything = (c: ContentIntel) => Boolean(c.bestTime || c.videos.length |
 export async function GET(request: Request) {
   const denied = await rejectIfNoAccess();
   if (denied) return denied;
-  if (!(await getSignedInClaims())) {
+  const claims = await getSignedInClaims();
+  if (!claims) {
     return NextResponse.json({ error: "Log in to see the content tools.", loginRequired: true }, { status: 401 });
   }
 
@@ -55,6 +57,9 @@ export async function GET(request: Request) {
 
   let run = running.get(sessionId);
   if (!run) {
+    // Only a new run spends searches, so only a new run counts toward the limit.
+    const limited = rejectIfTooMany(request, "content", claims.userId);
+    if (limited) return limited;
     const profile = session.companyIntelligence;
     const market = marketFromStored(session.marketIntelligence.research?.market);
     run = runContentResearch({ profile, market, sessionId })

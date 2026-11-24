@@ -27,6 +27,8 @@ import { runContentResearch } from "@/lib/research/content";
 import { marketFromStored } from "@/lib/research/market";
 import { buildResearchBrief } from "@/lib/ai/research-brief";
 import { analyzeMarket, answerBuyerQuestions, generateDiagnosis } from "@/lib/ai/gemini";
+import { rejectIfTooMany } from "@/lib/security/rate-limit";
+import { getSignedInClaims } from "@/lib/auth/supabase-server";
 
 // ──────────────────────────────────────────────
 // Validation (9-question format)
@@ -197,6 +199,9 @@ async function runPipeline(sessionId: string, input: OnboardingInput, deckText?:
 export async function POST(request: Request) {
   const denied = await rejectIfNoAccess();
   if (denied) return denied;
+  // Each analysis spends real searches and AI calls: a limit per person (or address, signed out).
+  const limited = rejectIfTooMany(request, "gather", (await getSignedInClaims())?.userId);
+  if (limited) return limited;
 
   try {
     const body = await request.json();

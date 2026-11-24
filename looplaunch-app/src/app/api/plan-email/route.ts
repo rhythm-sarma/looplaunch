@@ -9,6 +9,7 @@ import { NextResponse } from "next/server";
 import { getSignedInClaims } from "@/lib/auth/supabase-server";
 import { rejectIfNoAccess } from "@/lib/auth/team-guard";
 import { getPlanEmail, startPlanEmails } from "@/lib/plan-email/service";
+import { rejectIfTooMany } from "@/lib/security/rate-limit";
 
 /** One start per person every 30 seconds, so a double click can't send day 1 twice. */
 const lastStart = new Map<string, number>();
@@ -28,6 +29,8 @@ export async function POST(request: Request) {
   const denied = await rejectIfNoAccess();
   if (denied) return denied;
   if (!claims.email) return NextResponse.json({ error: "Your account has no email address." }, { status: 400 });
+  const limited = rejectIfTooMany(request, "email", claims.userId);
+  if (limited) return limited;
 
   const body = (await request.json().catch(() => ({}))) as { sessionId?: unknown; sendHour?: unknown; timeZone?: unknown };
   if (typeof body.sessionId !== "string" || !body.sessionId) {
