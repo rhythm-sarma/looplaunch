@@ -174,7 +174,7 @@ export const STEPS: StepConfig[] = [
     number: 3,
     field: "industry",
     heading: "Which industry are you in?",
-    subtext: "Pick one — we'll dial in the strategy for your space.",
+    subtext: "Pick one, and we'll dial in the strategy for your space.",
     inputType: "singleselect",
   },
   {
@@ -190,7 +190,7 @@ export const STEPS: StepConfig[] = [
     number: 5,
     field: "coreOffer",
     heading: "What's your core offer or product in a nutshell?",
-    subtext: "Keep it simple — one or two lines is plenty.",
+    subtext: "Keep it simple. One or two lines is plenty.",
     placeholder:
       "e.g. We sell handmade linen shirts for men who want comfort without trying.",
     inputType: "textarea",
@@ -200,7 +200,7 @@ export const STEPS: StepConfig[] = [
     number: 6,
     field: "audience",
     heading: "Who buys from you?",
-    subtext: "Pick up to 2 — who's on the receiving end of your offer?",
+    subtext: "Pick up to 2. Who's on the receiving end of your offer?",
     inputType: "multiselect",
     maxSelections: 2,
   },
@@ -225,7 +225,7 @@ export const STEPS: StepConfig[] = [
     number: 9,
     field: "thirtyDayGoal",
     heading: "What do you want in the next 30 days?",
-    subtext: "Pick one — this is what we'll build your week around.",
+    subtext: "Pick one. This is what we'll build your week around.",
     inputType: "singleselect",
   },
   {

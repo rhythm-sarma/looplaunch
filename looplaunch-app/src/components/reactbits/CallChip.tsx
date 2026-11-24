@@ -145,7 +145,7 @@ const CallChip: React.FC<CallChipProps> = ({
       if (timerRef.current) timerRef.current.textContent = fmt(ms);
     };
     if (status !== 'running') {
-      if ((status === 'idle' || !clock.current.ms) && timerRef.current) timerRef.current.textContent = '—';
+      if ((status === 'idle' || !clock.current.ms) && timerRef.current) timerRef.current.textContent = '';
       return undefined;
     }
     const startedAt = performance.now();

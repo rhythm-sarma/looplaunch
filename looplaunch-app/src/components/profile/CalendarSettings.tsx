@@ -30,7 +30,7 @@ const NOTICES: Record<string, { tone: ToastTone; title: string; description: str
     title: "Google Calendar isn't switched on yet",
     description: "The Google Calendar API needs turning on in Google Cloud for this app.",
   },
-  unavailable: { tone: "error", title: "Not available yet", description: "Connecting Google Calendar isn't set up on the server yet." },
+  unavailable: { tone: "info", title: "Google Calendar is coming soon", description: "You'll be able to connect it here once it's ready." },
   error: { tone: "error", title: "Couldn't connect Google Calendar", description: "Something went wrong. Please try again." },
 };
 
@@ -72,7 +72,13 @@ export function CalendarSettings({ data, notice, accountEmail }: { data: Calenda
       description={`Every morning, what's on your Google Calendar that day, sent to you ${via}.`}
     >
       {!data.available ? (
-        <p className="text-[14px] leading-6 text-[#B4B4BC]">Coming soon: connect Google Calendar and get your day&apos;s plan each morning.</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="inline-flex items-center gap-2 h-10 px-4 rounded-full border border-[#27272A] bg-[#141418] text-[14px] font-medium text-[#8B8B94] cursor-default select-none">
+            <GoogleIcon />
+            Connect Google Calendar
+          </span>
+          <span className="rounded-full bg-[#1C1C21] border border-[#27272A] px-2.5 py-0.5 text-[12px] font-medium text-[#B4B4BC]">Coming soon</span>
+        </div>
       ) : data.connection ? (
         <Connected connection={data.connection} channels={data.channels} accountEmail={accountEmail} />
       ) : (

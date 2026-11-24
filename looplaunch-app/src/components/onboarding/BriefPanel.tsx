@@ -70,7 +70,7 @@ export function BriefPanel({ data, currentKey }: { data: OnboardingData; current
                       : "Answering now"
                     : s.optional
                       ? "Optional"
-                      : "—"}
+                      : "Not yet"}
               </span>
             </li>
           );

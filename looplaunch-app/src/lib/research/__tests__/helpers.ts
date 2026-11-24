@@ -85,6 +85,12 @@ export function fakeSerp(options: {
       calls.location.push(city);
       return options.location ?? null;
     },
+    // Content tools aren't part of the competitor research these tests cover.
+    trends: async () => fail("not_configured"),
+    trendsRelated: async () => fail("not_configured"),
+    youtube: async () => fail("not_configured"),
+    news: async () => fail("not_configured"),
+    autocomplete: async () => fail("not_configured"),
   };
   return { client, calls };
 }

@@ -8,6 +8,7 @@ import { accountEmail, emailSender, sendEmail } from "@/lib/email/brevo";
 import { getSession } from "@/lib/intelligence/store";
 import { displayDomain } from "@/lib/intelligence/summary";
 import { getSiteUrl } from "@/lib/seo";
+import { writeGuides } from "./guides";
 import { DEFAULT_PLAN_HOUR, latestPlan, planEmailHtml, planEmailSubject, planEmailText, type PlanEmailData, type PlanEmailStatus } from "./plan";
 import {
   claimPlanSend,
@@ -16,6 +17,7 @@ import {
   listActivePlanEmails,
   recordPlanFailed,
   recordPlanSent,
+  saveGuides,
   savePlanEmail,
   toStatus,
   updatePlanHour,
@@ -37,17 +39,33 @@ export async function getPlanEmail(userId: string): Promise<PlanEmailData> {
   return { available: stored !== undefined, subscription: stored ? toStatus(stored) : null };
 }
 
-/** Send one step of someone's plan to them. */
-async function sendStep(plan: Pick<StoredPlanEmail, "sessionId" | "company" | "steps">, stepIndex: number, to: string): Promise<boolean> {
+/** Send one step of someone's plan to them, with its guide when there is one. */
+async function sendStep(plan: Pick<StoredPlanEmail, "sessionId" | "company" | "steps" | "guides">, stepIndex: number, to: string): Promise<boolean> {
   const site = getSiteUrl();
   const input = {
     company: plan.company,
     steps: plan.steps,
     stepIndex,
+    guide: plan.guides[stepIndex] ?? null,
     planUrl: `${site}/intelligence?session=${encodeURIComponent(plan.sessionId)}`,
     manageUrl: `${site}/profile#settings-plan-email`,
   };
   return sendEmail({ to, subject: planEmailSubject(input), html: planEmailHtml(input), text: planEmailText(input), tag: "daily-plan" });
+}
+
+/** Write and save the day guides for a plan that's missing them. Never throws. */
+async function addGuides(plan: StoredPlanEmail): Promise<void> {
+  try {
+    const session = await getSession(plan.sessionId);
+    if (!session) return;
+    const guides = await writeGuides(session, plan.steps);
+    if (!guides) return;
+    // Keep any guide that was already there.
+    plan.guides = plan.steps.map((_, i) => plan.guides[i] ?? guides[i] ?? null);
+    await saveGuides(plan.userId, plan.sessionId, plan.steps, plan.guides);
+  } catch (error) {
+    console.warn("[Plan email] Adding day guides failed:", message(error));
+  }
 }
 
 export type StartResult =
@@ -77,7 +95,9 @@ export async function startPlanEmails(
   const company =
     session.onboardingInput?.companyName?.trim() || session.companyIntelligence?.name?.trim() || displayDomain(session.onboardingInput?.website) || "your business";
 
-  const saved = await savePlanEmail({ userId: user.id, sessionId, company, steps: plan.steps, timeZone, sendHour });
+  // Loopy writes how to do each day now, so day 1 already has its guide.
+  const guides = await writeGuides(session, plan.steps);
+  const saved = await savePlanEmail({ userId: user.id, sessionId, company, steps: plan.steps, guides, timeZone, sendHour });
   if (!saved) return { ok: false, error: "unavailable", message: "Daily emails aren't set up on the server yet." };
 
   try {
@@ -128,6 +148,9 @@ export async function runPlanEmails(now = new Date()): Promise<PlanRunSummary> {
       continue;
     }
     if (!(await claimPlanSend(plan.userId, date))) continue;
+
+    // Plans started before the day guides (or whose guides failed to write) get them now, once.
+    if (!plan.guides[plan.nextStep]) await addGuides(plan);
 
     try {
       const to = await accountEmail(plan.userId);

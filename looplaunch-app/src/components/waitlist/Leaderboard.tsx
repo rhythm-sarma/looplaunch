@@ -177,7 +177,7 @@ export function Leaderboard({ board, status, clock, you, mine }: LeaderboardProp
           {empty.map((place) => (
             <li key={`empty-${place}`} aria-hidden="true" className={`hidden lg:grid ${COLS} ${LINE}`}>
               <span className="font-mono text-sm tabular-nums text-[#3F3F48]">{place}</span>
-              <span className="text-[#3F3F48]">—</span>
+              <span className="text-[#3F3F48]">·</span>
             </li>
           ))}
         </ol>

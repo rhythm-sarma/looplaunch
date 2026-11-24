@@ -341,7 +341,7 @@ function Workspace({ profile, sessions, truncated }: { profile: ProfileInfo; ses
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between gap-3">
                   <dt className="text-[#B4B4BC]">{k}</dt>
-                  <dd className={`truncate text-right ${v ? "text-[#F4F4F5]" : "text-[#8B8B94]"}`}>{v || "—"}</dd>
+                  <dd className={`truncate text-right ${v ? "text-[#F4F4F5]" : "text-[#8B8B94]"}`}>{v || "Not set"}</dd>
                 </div>
               ))}
             </dl>

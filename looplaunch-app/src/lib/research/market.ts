@@ -53,6 +53,23 @@ const COUNTRIES: Country[] = [
   { name: "Sweden", gl: "se", iso2: "SE", region: "2752", aliases: /\bsweden\b/i },
 ];
 
+/**
+ * The time zone "best hours to post" are shown in. Countries spanning several zones use the
+ * one most of their people live in.
+ */
+const TIME_ZONES: Record<string, string> = {
+  IN: "Asia/Kolkata", US: "America/New_York", GB: "Europe/London", CA: "America/Toronto", AU: "Australia/Sydney",
+  DE: "Europe/Berlin", FR: "Europe/Paris", SG: "Asia/Singapore", AE: "Asia/Dubai", IE: "Europe/Dublin",
+  NZ: "Pacific/Auckland", NL: "Europe/Amsterdam", ES: "Europe/Madrid", IT: "Europe/Rome", BR: "America/Sao_Paulo",
+  MX: "America/Mexico_City", JP: "Asia/Tokyo", ZA: "Africa/Johannesburg", NG: "Africa/Lagos", KE: "Africa/Nairobi",
+  PK: "Asia/Karachi", BD: "Asia/Dhaka", PH: "Asia/Manila", ID: "Asia/Jakarta", MY: "Asia/Kuala_Lumpur",
+  SA: "Asia/Riyadh", SE: "Europe/Stockholm",
+};
+
+export function marketTimeZone(market: Pick<SearchMarket, "iso2">): string {
+  return TIME_ZONES[market.iso2.toUpperCase()] ?? "UTC";
+}
+
 /** The market Loop Launch researches (see the note at the top). */
 const HOME_COUNTRY = COUNTRIES[0];
 export const HOME_MARKET = HOME_COUNTRY.name;
@@ -88,6 +105,27 @@ function shortCity(city: string): string {
 
 /** Free SerpApi Locations lookup: a city name → SerpApi's canonical location string. */
 export type CityResolver = (city: string, iso2: string) => Promise<string | null>;
+
+/**
+ * The search market an analysis was researched in, from what it saved (`research.market`).
+ * Older analyses without one get the home market.
+ */
+export function marketFromStored(
+  stored: { country?: string; searchLocation?: string; scope?: MarketScope; city?: string; assumed?: boolean } | undefined
+): SearchMarket {
+  const country = COUNTRIES.find((c) => c.name === stored?.country) ?? findCountry(stored?.country) ?? HOME_COUNTRY;
+  return {
+    scope: stored?.scope ?? "unknown",
+    country: country.name,
+    gl: country.gl,
+    iso2: country.iso2,
+    region: country.region,
+    location: stored?.searchLocation || country.name,
+    city: stored?.city,
+    assumed: stored?.assumed ?? true,
+    notes: [],
+  };
+}
 
 export async function resolveMarket(
   profile: Pick<CompanyIntelligence, "website" | "geography" | "country" | "city" | "marketScope">,

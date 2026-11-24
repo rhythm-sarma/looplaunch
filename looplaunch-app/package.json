@@ -9,6 +9,7 @@
     "lint": "eslint",
     "ingest:frameworks": "tsx scripts/ingest-frameworks.ts",
     "agenda:test-email": "tsx scripts/send-test-agenda.ts",
+    "plan:test-email": "tsx scripts/send-test-plan-email.ts",
     "test": "node --import tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {

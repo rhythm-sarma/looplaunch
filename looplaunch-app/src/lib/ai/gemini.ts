@@ -542,3 +542,147 @@ Reply with JSON only, at most 12 competitors, strongest first:
     return null;
   }
 }
+
+// ──────────────────────────────────────────────
+// Day-by-day guides for the daily plan email
+// ──────────────────────────────────────────────
+
+export interface DayGuideInput {
+  company: Pick<CompanyIntelligence, "name" | "industry" | "description"> &
+    Partial<Pick<CompanyIntelligence, "category" | "targetSegments" | "currentChannels" | "brandTone" | "products">>;
+  market?: ResearchMarket;
+  /** The whole strategy answer the steps come from */
+  strategy: string;
+  /** One line per day, in order */
+  steps: string[];
+}
+
+/**
+ * Turns each one-line day of a plan into a short guide (goal, steps, something ready to use,
+ * time, done-when, tip), all in one call. Returns the raw guides by day number, unchecked
+ * (src/lib/plan-email/plan.ts cleanGuide checks them); throws if the model is unavailable.
+ */
+export async function writeDayGuides(input: DayGuideInput): Promise<Array<{ n: number; guide: unknown }>> {
+  const model = getJsonModel(6000, 0.4);
+  if (!model) throw new Error("GEMINI_API_KEY not configured");
+
+  const c = input.company;
+  const about = [
+    `Business: ${c.name}${c.industry ? ` (${c.industry})` : ""}.`,
+    c.category ? `They sell: ${c.category}.` : "",
+    c.description ? `About: ${c.description}` : "",
+    c.products?.length ? `Products: ${c.products.slice(0, 8).join(", ")}.` : "",
+    c.targetSegments?.length ? `Buyers: ${c.targetSegments.slice(0, 4).join("; ")}.` : "",
+    c.currentChannels?.length ? `Channels they use now: ${c.currentChannels.slice(0, 6).join(", ")}.` : "",
+    c.brandTone ? `Brand voice: ${c.brandTone}.` : "",
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .slice(0, 1800);
+
+  const prompt = `You are Loopy, the marketing coach inside Loop Launch. A founder is following a 7-day plan for their business, and every morning they get an email with that day's step. A one-line step isn't enough to act on, so for each day write a short, practical guide they can follow that morning without opening anything else.
+
+${about}
+
+${marketBrief(input.market)}
+The full strategy they were given. Use its pillars, hooks, channels, numbers and KPIs, and stay consistent with it:
+<<<
+${input.strategy.slice(0, 9000)}
+>>>
+
+The days:
+${input.steps.map((step, i) => `${i + 1}. ${step}`).join("\n")}
+
+For every day, write:
+- "goal": one sentence on why today matters for this business: what it unlocks, or which buyer worry it answers. Don't repeat the step's own words.
+- "tasks": 3 to 5 steps in the order to do them. Each starts with a verb and is specific to this business: name the product, the channel, the number of posts, the place. Each can be done today by a founder or a small team. No vague advice like "engage with your audience" or "be consistent".
+- "example": something ready to use today, with a "label" (like "Hook for today's reel", "Caption", "WhatsApp message", "Story text", "Shot list", "Questions to ask") and the "text" itself, written out in full in the brand's voice. For a shot list or a script, put each line on its own line.
+- "time": how long today takes, like "About 1 hour" or "2 to 3 hours".
+- "doneWhen": one sentence on how they know today is done: something they can count or see.
+- "tip": one short insider tip that makes today's step work better.
+
+Write in plain words, like a person talking. Never use em dashes (—), en dashes (–) or a spaced hyphen as a dash. Don't invent facts about the business, prices, results or numbers that aren't in the strategy or the business details. Examples can be creative but must fit what they sell.
+
+Reply with JSON only: {"days": [{"n": 1, "goal": "...", "tasks": ["..."], "example": {"label": "...", "text": "..."}, "time": "...", "doneWhen": "...", "tip": "..."}]}`;
+
+  type Day = Record<string, unknown> & { n?: number };
+  const raw = await withRetry("writeDayGuides", async () => {
+    const result = await model.generateContent(prompt);
+    return parseJsonResponse<{ days?: Day[] } | Day[]>(result.response.text());
+  });
+
+  const clean = (value: unknown): unknown => {
+    if (typeof value === "string") return stripDashes(value);
+    if (Array.isArray(value)) return value.map(clean);
+    if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, clean(v)]));
+    return value;
+  };
+  return (Array.isArray(raw) ? raw : raw.days || [])
+    .filter((d) => typeof d?.n === "number" && d.n >= 1 && d.n <= input.steps.length)
+    .map((d) => ({ n: d.n as number, guide: clean(d) }));
+}
+
+// ──────────────────────────────────────────────
+// Content tools: news hooks and example captions
+// ──────────────────────────────────────────────
+
+export interface ContentIdeasInput {
+  company: Pick<CompanyIntelligence, "name" | "industry" | "description"> & Partial<Pick<CompanyIntelligence, "category" | "brandTone">>;
+  market?: ResearchMarket;
+  /** Recent headlines, newest first */
+  headlines: Array<{ title: string; source?: string }>;
+  /** What people search, for the captions */
+  keywords: string[];
+}
+
+/**
+ * One line per headline on how this business could turn it into a post, and three short
+ * captions that use the keywords people search. Throws if the model is unavailable.
+ */
+export async function writeContentIdeas(input: ContentIdeasInput): Promise<{ hooks: Array<{ n: number; hook: string }>; captions: string[] }> {
+  const model = getJsonModel(2500, 0.5);
+  if (!model) throw new Error("GEMINI_API_KEY not configured");
+
+  const c = input.company;
+  const about = [
+    `Business: ${c.name}${c.industry ? ` (${c.industry})` : ""}.`,
+    c.category ? `They sell: ${c.category}.` : "",
+    c.description ? `About: ${c.description.slice(0, 500)}` : "",
+    c.brandTone ? `Brand voice: ${c.brandTone}.` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const prompt = `You are Loopy, the marketing coach inside Loop Launch, helping a founder plan social posts.
+
+${about}
+
+${marketBrief(input.market)}
+Recent news in their market:
+${input.headlines.map((h, i) => `${i + 1}. ${h.title}${h.source ? ` (${h.source})` : ""}`).join("\n") || "(none)"}
+
+What people search on Google for this category:
+${input.keywords.join(", ") || "(none)"}
+
+Write:
+- "hooks": for every headline, one sentence (under 25 words) on exactly how this business can turn that story into a post or reel today. Start with a verb. Say what the post shows or asks, not just "post about it". If a headline has nothing to do with what they sell, still find the angle their buyers would care about.
+- "captions": 3 short Instagram captions (1 to 3 lines each) in the brand's voice that use one or two of the search phrases naturally, each ending with 3 relevant hashtags.
+
+Plain words, like a person talking. Never use em dashes (—), en dashes (–) or a spaced hyphen as a dash. Don't invent prices, offers, stores, marketplaces or facts about the business: only name a place to buy if the business details above name it. Write a hook for every headline.
+
+Reply with JSON only: {"hooks": [{"n": 1, "hook": "..."}], "captions": ["...", "...", "..."]}`;
+
+  const raw = await withRetry("writeContentIdeas", async () => {
+    const result = await model.generateContent(prompt);
+    return parseJsonResponse<{ hooks?: Array<{ n?: number; hook?: string }>; captions?: unknown[] }>(result.response.text());
+  });
+  return {
+    hooks: (raw.hooks || [])
+      .filter((h) => typeof h.n === "number" && h.n >= 1 && h.n <= input.headlines.length && typeof h.hook === "string" && h.hook.trim())
+      .map((h) => ({ n: h.n as number, hook: stripDashes((h.hook as string).trim()).slice(0, 300) })),
+    captions: (raw.captions || [])
+      .filter((x): x is string => typeof x === "string" && Boolean(x.trim()))
+      .slice(0, 3)
+      .map((x) => stripDashes(x.trim()).slice(0, 600)),
+  };
+}

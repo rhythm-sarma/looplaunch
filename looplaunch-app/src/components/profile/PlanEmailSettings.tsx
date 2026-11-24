@@ -56,7 +56,7 @@ export function PlanEmailSettings({ data, accountEmail }: { data: PlanEmailData;
     <SettingsSection
       id="settings-plan-email"
       title="Daily plan email"
-      description="One step of your 7-day plan in your inbox each morning, so you always know what to do today."
+      description="Each morning, that day's step of your 7-day plan with exactly how to do it: the steps, something ready to use, and how you know you're done."
     >
       {!data.available ? (
         <p className="text-[14px] leading-6 text-[#B4B4BC]">Coming soon: get each day&apos;s step of your plan by email.</p>

@@ -7,6 +7,8 @@
  *   so one parser reads both. One call answers several research needs.
  * - `google_ads_transparency_center`: an advertiser's ads in Google's Ads Transparency
  *   Center (`text` = domain, `region` = numeric country code).
+ * - Content tools (src/lib/research/content.ts): `google_trends` (interest over time, and
+ *   related searches), `youtube`, `google_news` and `google_autocomplete`.
  * Free endpoints: Locations API (city → canonical location) and Account API (quota).
  *
  * Every call returns either data or a typed failure, so "the search failed" is never
@@ -85,6 +87,68 @@ export interface AdLibraryData {
   creatives: AdvertiserAdCreative[];
 }
 
+/** One point of Google Trends interest: 0 to 100, relative to the busiest point in the range. */
+export interface TrendPoint {
+  /** Start of the week (or hour), as Unix seconds */
+  timestamp: number;
+  value: number;
+  /** Google marks the newest point when its period isn't over yet */
+  partial?: boolean;
+}
+
+export interface TrendsSeries {
+  points: TrendPoint[];
+}
+
+export interface RelatedSearch {
+  query: string;
+  /** "Top": 0 to 100 popularity. "Rising": percentage growth, or a very large number for "Breakout". */
+  value: number;
+  label: string;
+}
+
+export interface TrendsRelated {
+  top: RelatedSearch[];
+  rising: RelatedSearch[];
+}
+
+export interface YouTubeVideo {
+  title: string;
+  link: string;
+  videoId?: string;
+  channel?: string;
+  views?: number;
+  /** "16:06"; Shorts don't say */
+  length?: string;
+  /** "1mo ago" */
+  published?: string;
+  thumbnail?: string;
+  isShort: boolean;
+}
+
+export interface YouTubeData {
+  videos: YouTubeVideo[];
+}
+
+export interface NewsItem {
+  title: string;
+  link: string;
+  source?: string;
+  /** ISO date */
+  publishedAt?: string;
+  thumbnail?: string;
+}
+
+export interface NewsData {
+  items: NewsItem[];
+}
+
+export interface AutocompleteData {
+  suggestions: string[];
+}
+
+export type TrendsRange = "today 12-m" | "now 7-d";
+
 export type ProviderFailureKind = "not_configured" | "rate_limited" | "quota" | "http" | "network" | "provider_error";
 
 export type ProviderResult<T> =
@@ -99,6 +163,13 @@ export interface SerpCallContext {
 export interface SerpApiClient {
   googleSearch(query: string, market: SearchMarket, ctx: SerpCallContext): Promise<ProviderResult<GoogleSearchData>>;
   adLibrary(domain: string, market: SearchMarket, ctx: SerpCallContext): Promise<ProviderResult<AdLibraryData>>;
+  /** Google Trends interest over the last 12 months (weekly) or 7 days (hourly), in the market's country */
+  trends(query: string, market: SearchMarket, range: TrendsRange, ctx: SerpCallContext): Promise<ProviderResult<TrendsSeries>>;
+  /** Google Trends "related searches" over the last 3 months */
+  trendsRelated(query: string, market: SearchMarket, ctx: SerpCallContext): Promise<ProviderResult<TrendsRelated>>;
+  youtube(query: string, market: SearchMarket, ctx: SerpCallContext): Promise<ProviderResult<YouTubeData>>;
+  news(query: string, market: SearchMarket, ctx: SerpCallContext): Promise<ProviderResult<NewsData>>;
+  autocomplete(query: string, market: SearchMarket, ctx: SerpCallContext): Promise<ProviderResult<AutocompleteData>>;
   /** Free Locations API: "Austin, Texas" → "Austin,Texas,United States". */
   resolveLocation(city: string, iso2: string, ctx?: SerpCallContext): Promise<string | null>;
 }
@@ -268,6 +339,90 @@ export function parseAdLibrary(data: Json, collectedAt: string): AdLibraryData {
   return { creatives };
 }
 
+// ─── Content tools ───
+
+const intOf = (v: unknown): number | undefined => num(v) ?? (typeof v === "string" && /^\d+$/.test(v) ? Number(v) : undefined);
+
+export function parseTrends(data: Json): TrendsSeries {
+  const timeline = arr((data.interest_over_time as Json | undefined)?.timeline_data);
+  const points = timeline
+    .map((p) => {
+      const first = arr(p.values)[0];
+      const value = num(first?.extracted_value) ?? intOf(first?.value);
+      const timestamp = intOf(p.timestamp);
+      return timestamp !== undefined && value !== undefined ? { timestamp, value, ...(p.partial_data ? { partial: true } : {}) } : null;
+    })
+    .filter((p): p is TrendPoint => p !== null);
+  return { points };
+}
+
+export function parseTrendsRelated(data: Json): TrendsRelated {
+  const related = (data.related_queries as Json | undefined) ?? {};
+  const list = (raw: unknown) =>
+    arr(raw)
+      .map((q) => ({ query: str(q.query), value: num(q.extracted_value) ?? 0, label: str(q.value) }))
+      .filter((q) => q.query);
+  return { top: list(related.top), rising: list(related.rising) };
+}
+
+export function parseYouTube(data: Json): YouTubeData {
+  const shorts: YouTubeVideo[] = arr(data.shorts_results)
+    .flatMap((block) => arr(block.shorts))
+    .map((v) => {
+      const videoId = str(v.video_id) || undefined;
+      return {
+        title: str(v.title),
+        link: httpUrl(v.link) ?? "",
+        videoId,
+        views: num(v.views),
+        // A Short's `frame0.jpg` is its first frame, often black; its regular thumbnail is the picked one.
+        thumbnail: videoId && /^[\w-]{6,20}$/.test(videoId) ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : httpUrl(v.thumbnail),
+        isShort: true,
+      };
+    });
+  const videos: YouTubeVideo[] = arr(data.video_results).map((v) => {
+    const thumb = v.thumbnail;
+    return {
+      title: str(v.title),
+      link: httpUrl(v.link) ?? "",
+      videoId: str(v.video_id) || undefined,
+      channel: str((v.channel as Json | undefined)?.name) || undefined,
+      views: num(v.views),
+      length: str(v.length) || undefined,
+      published: str(v.published_date) || undefined,
+      thumbnail: httpUrl(typeof thumb === "object" && thumb ? (thumb as Json).static : thumb),
+      isShort: /\/shorts\//.test(str(v.link)),
+    };
+  });
+  return { videos: [...shorts, ...videos].filter((v) => v.title && v.link) };
+}
+
+export function parseNews(data: Json): NewsData {
+  // A result is either a story, or a group of stories under one heading.
+  const flat = arr(data.news_results).flatMap((n) => (arr(n.stories).length ? arr(n.stories) : [n]));
+  const items: NewsItem[] = flat
+    .map((n) => {
+      const iso = str(n.iso_date);
+      const parsed = iso ? new Date(iso) : null;
+      return {
+        title: str(n.title),
+        link: httpUrl(n.link) ?? "",
+        source: str((n.source as Json | undefined)?.name) || str(n.source) || undefined,
+        publishedAt: parsed && !Number.isNaN(parsed.getTime()) ? parsed.toISOString() : undefined,
+        thumbnail: httpUrl(n.thumbnail),
+      };
+    })
+    .filter((n) => n.title && n.link);
+  return { items };
+}
+
+export function parseAutocomplete(data: Json): AutocompleteData {
+  return { suggestions: arr(data.suggestions).map((s) => str(s.value)).filter(Boolean) };
+}
+
+/** How long each kind of content result is reused: news goes stale fastest. */
+const CONTENT_TTL_HOURS = { news: 12, trends: 24, youtube: 72, autocomplete: 24 * 7 } as const;
+
 // ──────────────────────────────────────────────
 // Client
 // ──────────────────────────────────────────────
@@ -308,7 +463,8 @@ export function createSerpApiClient({ apiKey, cache, config, fetchImpl = fetch, 
     keyParams: Record<string, unknown>,
     parse: (data: Json, fetchedAt: string) => T,
     ctx: SerpCallContext,
-    label: string
+    label: string,
+    ttlHours = config.cacheTtlHours
   ): Promise<ProviderResult<T>> {
     const started = Date.now();
     const log = (cacheHit: boolean, success: boolean, error?: string) =>
@@ -341,7 +497,7 @@ export function createSerpApiClient({ apiKey, cache, config, fetchImpl = fetch, 
         if (res.ok && (!errText || NO_RESULTS.test(errText))) {
           const fetchedAt = new Date().toISOString();
           const parsed = parse(errText ? {} : body, fetchedAt);
-          const entry = await cache.set(key, { provider: "serpapi", operation, params: keyParams }, parsed, config.cacheTtlHours);
+          const entry = await cache.set(key, { provider: "serpapi", operation, params: keyParams }, parsed, ttlHours);
           log(false, true);
           return { ok: true, data: parsed, fromCache: false, fetchedAt: entry.fetchedAt };
         }
@@ -383,6 +539,70 @@ export function createSerpApiClient({ apiKey, cache, config, fetchImpl = fetch, 
         (data, fetchedAt) => parseAdLibrary(data, fetchedAt),
         ctx,
         domain
+      );
+    },
+
+    trends(query, market, range, ctx) {
+      const q = query.toLowerCase();
+      return request(
+        "google_trends",
+        { engine: "google_trends", q, geo: market.iso2, date: range, data_type: "TIMESERIES", hl: "en" },
+        { q, geo: market.iso2, date: range },
+        (data) => parseTrends(data),
+        ctx,
+        `${query} (${range})`,
+        CONTENT_TTL_HOURS.trends
+      );
+    },
+
+    trendsRelated(query, market, ctx) {
+      const q = query.toLowerCase();
+      return request(
+        "google_trends_related",
+        { engine: "google_trends", q, geo: market.iso2, date: "today 3-m", data_type: "RELATED_QUERIES", hl: "en" },
+        { q, geo: market.iso2 },
+        (data) => parseTrendsRelated(data),
+        ctx,
+        `${query} (related searches)`,
+        CONTENT_TTL_HOURS.trends
+      );
+    },
+
+    youtube(query, market, ctx) {
+      return request(
+        "youtube",
+        { engine: "youtube", search_query: query, gl: market.gl, hl: "en" },
+        // parser 2: Shorts use their regular thumbnail, not the first frame
+        { q: canonicalQuery(query), gl: market.gl, parser: 2 },
+        (data) => parseYouTube(data),
+        ctx,
+        query,
+        CONTENT_TTL_HOURS.youtube
+      );
+    },
+
+    news(query, market, ctx) {
+      return request(
+        "google_news",
+        { engine: "google_news", q: query, gl: market.gl, hl: "en" },
+        { q: canonicalQuery(query), gl: market.gl },
+        (data) => parseNews(data),
+        ctx,
+        query,
+        CONTENT_TTL_HOURS.news
+      );
+    },
+
+    autocomplete(query, market, ctx) {
+      const q = query.toLowerCase();
+      return request(
+        "google_autocomplete",
+        { engine: "google_autocomplete", q, gl: market.gl, hl: "en" },
+        { q, gl: market.gl },
+        (data) => parseAutocomplete(data),
+        ctx,
+        query,
+        CONTENT_TTL_HOURS.autocomplete
       );
     },
 

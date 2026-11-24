@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Workspace Ready — Loop Launch",
+  title: "Workspace Ready",
   description: "Your Loop Launch workspace is ready for analysis.",
 };
 

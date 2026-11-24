@@ -339,6 +339,72 @@ export interface MarketIntelligence {
   research?: ResearchRunInfo;
   /** True when the AI market analysis failed (fields above are empty, not invented) */
   analysisUnavailable?: boolean;
+  /** The ☰ menu's content tools: best time to post, reference videos, news hooks, caption keywords */
+  contentIntel?: ContentIntel;
+}
+
+// ──────────────────────────────────────────────
+// Content tools (src/lib/research/content.ts)
+// ──────────────────────────────────────────────
+
+export type ContentTool = "time" | "videos" | "news" | "keywords";
+
+export interface ContentVideo {
+  title: string;
+  link: string;
+  channel?: string;
+  views?: number;
+  length?: string;
+  published?: string;
+  thumbnail?: string;
+  isShort: boolean;
+}
+
+export interface ContentNewsItem {
+  title: string;
+  link: string;
+  source?: string;
+  publishedAt?: string;
+  /** Loopy's one line on turning the story into a post for this business */
+  hook?: string;
+}
+
+export interface ContentKeyword {
+  phrase: string;
+  /** Growing fast on Google Trends, with Google's label ("+140%") */
+  rising?: string;
+}
+
+export interface ContentBestTime {
+  /** The last 12 months, oldest first: average Google Trends interest (0 to 100) */
+  months: Array<{ key: string; label: string; value: number }>;
+  /** The two busiest months, as labels ("Oct") */
+  peakMonths: string[];
+  /** The last 3 months against the 3 before them */
+  trend: "rising" | "falling" | "steady";
+  /** Average interest by hour of day (0 to 23) over the last 7 days, in timeZone. Missing when too sparse. */
+  hours?: number[];
+  /** The busiest 3 hours of the day: start hour, end hour (exclusive, may pass midnight) */
+  bestWindow?: { start: number; end: number };
+  /** The two busiest days of the week ("Sunday") */
+  bestDays?: string[];
+}
+
+export interface ContentIntel {
+  /** The search term the tools looked up ("smartphones") */
+  term: string;
+  country: string;
+  timeZone: string;
+  collectedAt: string;
+  bestTime?: ContentBestTime;
+  videos: ContentVideo[];
+  news: ContentNewsItem[];
+  keywords: ContentKeyword[];
+  hashtags: string[];
+  /** Example captions Loopy wrote with the keywords */
+  captions: string[];
+  /** What couldn't be collected, in plain words */
+  limitations: string[];
 }
 
 export type ResearchStatus = "complete" | "partial" | "empty" | "unavailable";

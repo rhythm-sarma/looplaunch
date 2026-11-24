@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { ChevronRight, X } from "lucide-react";
 import { LoopyMascot } from "@/components/loopy/LoopyMascot";
 import type { MindMapData } from "@/lib/intelligence/mind-map";
@@ -11,6 +11,9 @@ import type { MindMapData } from "@/lib/intelligence/mind-map";
  * Sections become branches and each step becomes a short point (parsed in
  * lib/intelligence/mind-map.ts). Tapping a branch opens it; tapping a point shows the full
  * step right inside the map.
+ *
+ * When it opens, the map grows out from the centre: the centre pops in, then each branch's line
+ * draws out and its box slides in, one after another, then the open branch's points the same way.
  */
 
 export { parseMindMap, type MindMapBranch, type MindMapData, type MindMapLeaf } from "@/lib/intelligence/mind-map";
@@ -32,22 +35,52 @@ const TREE = "[--arm:20px] lg:[--arm:32px]";
 // Connectors meet each node at the middle of its first line (10px padding + half a 20px line).
 const CENTER_Y = ROW_PAD + NODE_H / 2;
 
+// ─── Growing ───
+const EASE_OUT = [0.22, 1, 0.36, 1] as const;
+/** Gap between one branch (or point) starting to grow and the next */
+const BRANCH_STEP = 0.08;
+const LEAF_STEP = 0.05;
+/** When the branches start: once the centre and its stem are in */
+const BRANCHES_AT = 0.3;
+
+/** A connector line that draws itself out from where it starts. */
+function Line({ className, style, axis, delay }: { className?: string; style: React.CSSProperties; axis: "x" | "y"; delay: number | null }) {
+  return (
+    <motion.span
+      aria-hidden="true"
+      className={className}
+      style={{ ...style, transformOrigin: axis === "x" ? "left center" : "center top" }}
+      initial={delay === null ? false : axis === "x" ? { scaleX: 0 } : { scaleY: 0 }}
+      animate={axis === "x" ? { scaleX: 1 } : { scaleY: 1 }}
+      transition={{ delay: delay ?? 0, duration: 0.22, ease: EASE_OUT }}
+    />
+  );
+}
+
+/** A node sliding in from its line. */
+const nodeIn = (delay: number | null) => ({
+  initial: delay === null ? (false as const) : { opacity: 0, x: -10, scale: 0.96 },
+  animate: { opacity: 1, x: 0, scale: 1 },
+  transition: { delay: delay ?? 0, type: "spring" as const, duration: 0.42, bounce: 0.22 },
+});
+
 /**
  * The elbow lines that join a row to its parent's spine. Sideways, the first row meets its parent
- * head on; downwards, its spine also reaches up to the parent above it.
+ * head on; downwards, its spine also reaches up to the parent above it. `delay` null: no drawing.
  */
-function Connector({ first, last }: { first: boolean; last: boolean }) {
+function Connector({ first, last, delay }: { first: boolean; last: boolean; delay: number | null }) {
+  const after = (s: number) => (delay === null ? null : delay + s);
   return (
     <>
-      <span aria-hidden="true" className={`absolute left-0 top-0 w-px ${first ? "lg:hidden" : ""}`} style={{ height: CENTER_Y, background: LINE }} />
-      {!last && <span aria-hidden="true" className="absolute left-0 bottom-0 w-px" style={{ top: CENTER_Y, background: LINE }} />}
-      <span aria-hidden="true" className="absolute left-0 h-px" style={{ top: CENTER_Y, width: ARM, background: LINE }} />
+      <Line axis="y" delay={delay} className={`absolute left-0 top-0 w-px ${first ? "lg:hidden" : ""}`} style={{ height: CENTER_Y, background: LINE }} />
+      {!last && <Line axis="y" delay={after(0.12)} className="absolute left-0 bottom-0 w-px" style={{ top: CENTER_Y, background: LINE }} />}
+      <Line axis="x" delay={after(0.06)} className="absolute left-0 h-px" style={{ top: CENTER_Y, width: ARM, background: LINE }} />
     </>
   );
 }
 
-const Stub = () => (
-  <span aria-hidden="true" className="hidden lg:block h-px shrink-0" style={{ width: ARM, marginTop: NODE_H / 2, background: LINE }} />
+const Stub = ({ delay }: { delay: number | null }) => (
+  <Line axis="x" delay={delay} className="hidden lg:block h-px shrink-0" style={{ width: ARM, marginTop: NODE_H / 2, background: LINE }} />
 );
 
 interface MindMapDialogProps {
@@ -141,118 +174,174 @@ export function MindMapDialog({ open, onClose, data }: MindMapDialogProps) {
               {branchCount === 0 ? (
                 <p className="text-[14px] text-[#B4B4BC] text-center py-10">This answer is too short for a mind map.</p>
               ) : (
-                <div className={`flex flex-col lg:flex-row lg:items-start w-full lg:w-max mx-auto ${TREE}`}>
-                  {/* Centre */}
-                  <div className="lg:w-48 shrink-0" style={{ marginTop: CENTER_Y - ROOT_H / 2 }}>
-                    <button
-                      type="button"
-                      onClick={() => data.summary && setShowSummary((s) => !s)}
-                      aria-expanded={data.summary ? showSummary : undefined}
-                      className={`w-full rounded-2xl bg-[#F4F4F5] text-[#09090B] px-4 text-center text-sm font-semibold leading-snug flex items-center justify-center ${
-                        data.summary ? "cursor-pointer hover:bg-white" : "cursor-default"
-                      }`}
-                      style={{ height: ROOT_H }}
-                    >
-                      <span className="line-clamp-2">{data.root}</span>
-                    </button>
-                    {showSummary && data.summary && (
-                      <p className="mt-2 rounded-xl bg-[#1C1C21] p-3 text-[13px] leading-relaxed text-[#D4D4D8]">
-                        {data.summary}
-                      </p>
-                    )}
-                  </div>
-                  <span aria-hidden="true" className="hidden lg:block h-px shrink-0" style={{ width: ARM, marginTop: CENTER_Y, background: LINE }} />
-
-                  {/* Branches */}
-                  <ul className="ml-3 lg:ml-0">
-                    {data.branches.map((branch, bi) => {
-                      const hue = HUE;
-                      const isOpen = openBranches.has(bi);
-                      return (
-                        <li
-                          key={bi}
-                          className="relative flex flex-col lg:flex-row lg:items-start"
-                          style={{ paddingLeft: ARM, paddingTop: ROW_PAD, paddingBottom: ROW_PAD }}
-                        >
-                          <Connector first={bi === 0} last={bi === branchCount - 1} />
-                          <button
-                            type="button"
-                            onClick={() => toggleBranch(bi)}
-                            aria-expanded={isOpen}
-                            title={branch.label}
-                            className="w-full lg:w-56 shrink-0 flex items-start gap-2 rounded-xl px-3 py-2.5 bg-[#1C1C21] hover:bg-[#232329] border transition-colors cursor-pointer"
-                            style={{ minHeight: NODE_H, borderColor: isOpen ? `${hue}99` : "transparent" }}
-                          >
-                            <span className="w-2 h-2 rounded-full shrink-0 mt-1.5" style={{ background: hue }} />
-                            <span className="flex-1 line-clamp-2 text-left text-[13px] leading-5 font-semibold text-[#F4F4F5]">
-                              {branch.label}
-                            </span>
-                            <span className="text-[12px] leading-5 text-[#8B8B94] tabular-nums">{branch.leaves.length}</span>
-                            <ChevronRight
-                              className={`w-3.5 h-3.5 mt-[3px] text-[#8B8B94] shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
-                            />
-                          </button>
-
-                          {isOpen && (
-                            <>
-                              <Stub />
-                              <motion.ul
-                                initial={{ opacity: 0, x: -6 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ duration: 0.18 }}
-                                className="ml-3 lg:ml-0 lg:-mt-2"
-                              >
-                                {branch.leaves.map((leaf, li) => {
-                                  const key = `${bi}-${li}`;
-                                  const leafOpen = openLeaf === key;
-                                  return (
-                                    <li
-                                      key={key}
-                                      className="relative"
-                                      style={{ paddingLeft: ARM, paddingTop: ROW_PAD, paddingBottom: ROW_PAD }}
-                                    >
-                                      <Connector first={li === 0} last={li === branch.leaves.length - 1} />
-                                      <button
-                                        type="button"
-                                        onClick={() => leaf.detail && setOpenLeaf(leafOpen ? null : key)}
-                                        aria-expanded={leaf.detail ? leafOpen : undefined}
-                                        className={`w-full lg:w-72 text-left rounded-xl border px-3 py-2.5 transition-colors ${
-                                          leaf.detail ? "cursor-pointer hover:border-[#3F3F46]" : "cursor-default"
-                                        } ${leafOpen ? "bg-[#17171B]" : "bg-[#111114] border-[#27272A]"}`}
-                                        style={{ minHeight: NODE_H, borderColor: leafOpen ? `${hue}99` : undefined }}
-                                      >
-                                        <span className="flex items-start justify-between gap-2">
-                                          <span className="text-[13px] leading-5 text-[#E4E4E7]">{leaf.label}</span>
-                                          {leaf.detail && (
-                                            <ChevronRight
-                                              className={`w-3.5 h-3.5 mt-[3px] text-[#8B8B94] shrink-0 transition-transform ${
-                                                leafOpen ? "rotate-90" : ""
-                                              }`}
-                                            />
-                                          )}
-                                        </span>
-                                        {leafOpen && leaf.detail && (
-                                          <span className="block mt-2 pt-2 border-t border-[#2E2E35] text-[13px] leading-relaxed text-[#D4D4D8]">
-                                            {leaf.detail}
-                                          </span>
-                                        )}
-                                      </button>
-                                    </li>
-                                  );
-                                })}
-                              </motion.ul>
-                            </>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
+                <MindMapTree
+                  data={data}
+                  openBranches={openBranches}
+                  toggleBranch={toggleBranch}
+                  openLeaf={openLeaf}
+                  setOpenLeaf={setOpenLeaf}
+                  showSummary={showSummary}
+                  setShowSummary={setShowSummary}
+                />
               )}
             </div>
           </motion.div>
         </motion.div>
       )}
     </AnimatePresence>
+  );
+}
+
+// ──────────────────────────────────────────────
+// The tree
+// ──────────────────────────────────────────────
+
+interface MindMapTreeProps {
+  data: MindMapData;
+  openBranches: Set<number>;
+  toggleBranch: (i: number) => void;
+  openLeaf: string | null;
+  setOpenLeaf: (key: string | null) => void;
+  showSummary: boolean;
+  setShowSummary: (fn: (s: boolean) => boolean) => void;
+}
+
+/** Mounts each time the map opens, so the map grows out from the centre every time. */
+function MindMapTree({ data, openBranches, toggleBranch, openLeaf, setOpenLeaf, showSummary, setShowSummary }: MindMapTreeProps) {
+  const reduce = useReducedMotion();
+  const branchCount = data.branches.length;
+  // Points that are open when the map opens wait for the branches; ones opened later grow at once.
+  const leavesAt = BRANCHES_AT + branchCount * BRANCH_STEP + 0.1;
+  const [introOver, setIntroOver] = useState(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => setIntroOver(true), leavesAt * 1000);
+    return () => window.clearTimeout(t);
+  }, [leavesAt]);
+
+  const at = (seconds: number) => (reduce ? null : seconds);
+
+  return (
+    <div className={`flex flex-col lg:flex-row lg:items-start w-full lg:w-max mx-auto ${TREE}`}>
+      {/* Centre */}
+      <div className="lg:w-48 shrink-0" style={{ marginTop: CENTER_Y - ROOT_H / 2 }}>
+        <motion.button
+          type="button"
+          onClick={() => data.summary && setShowSummary((s) => !s)}
+          aria-expanded={data.summary ? showSummary : undefined}
+          className={`w-full rounded-2xl bg-[#F4F4F5] text-[#09090B] px-4 text-center text-sm font-semibold leading-snug flex items-center justify-center ${
+            data.summary ? "cursor-pointer hover:bg-white" : "cursor-default"
+          }`}
+          style={{ height: ROOT_H }}
+          initial={reduce ? false : { opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.06, type: "spring", duration: 0.45, bounce: 0.35 }}
+        >
+          <span className="line-clamp-2">{data.root}</span>
+        </motion.button>
+        <AnimatePresence initial={false}>
+          {showSummary && data.summary && (
+            <motion.p
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.22, ease: EASE_OUT }}
+              className="overflow-hidden"
+            >
+              <span className="block mt-2 rounded-xl bg-[#1C1C21] p-3 text-[13px] leading-relaxed text-[#D4D4D8]">{data.summary}</span>
+            </motion.p>
+          )}
+        </AnimatePresence>
+      </div>
+      <Line axis="x" delay={at(0.2)} className="hidden lg:block h-px shrink-0" style={{ width: ARM, marginTop: CENTER_Y, background: LINE }} />
+
+      {/* Branches, one after another */}
+      <ul className="ml-3 lg:ml-0">
+        {data.branches.map((branch, bi) => {
+          const hue = HUE;
+          const isOpen = openBranches.has(bi);
+          const grow = BRANCHES_AT + bi * BRANCH_STEP;
+          const leafBase = introOver ? 0.02 : leavesAt;
+          return (
+            <li
+              key={bi}
+              className="relative flex flex-col lg:flex-row lg:items-start"
+              style={{ paddingLeft: ARM, paddingTop: ROW_PAD, paddingBottom: ROW_PAD }}
+            >
+              <Connector first={bi === 0} last={bi === branchCount - 1} delay={at(grow)} />
+              <motion.button
+                type="button"
+                onClick={() => toggleBranch(bi)}
+                aria-expanded={isOpen}
+                title={branch.label}
+                className="w-full lg:w-56 shrink-0 flex items-start gap-2 rounded-xl px-3 py-2.5 bg-[#1C1C21] hover:bg-[#232329] border transition-colors cursor-pointer"
+                style={{ minHeight: NODE_H, borderColor: isOpen ? `${hue}99` : "transparent" }}
+                {...nodeIn(at(grow + 0.12))}
+              >
+                <span className="w-2 h-2 rounded-full shrink-0 mt-1.5" style={{ background: hue }} />
+                <span className="flex-1 line-clamp-2 text-left text-[13px] leading-5 font-semibold text-[#F4F4F5]">{branch.label}</span>
+                <span className="text-[12px] leading-5 text-[#8B8B94] tabular-nums">{branch.leaves.length}</span>
+                <ChevronRight className={`w-3.5 h-3.5 mt-[3px] text-[#8B8B94] shrink-0 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
+              </motion.button>
+
+              <AnimatePresence>
+                {isOpen && <Stub key="stub" delay={at(leafBase)} />}
+                {isOpen && (
+                  <motion.ul
+                    key="leaves"
+                    exit={{ opacity: 0, x: -6, transition: { duration: 0.15 } }}
+                    className="ml-3 lg:ml-0 lg:-mt-2"
+                  >
+                    {branch.leaves.map((leaf, li) => {
+                      const key = `${bi}-${li}`;
+                      const leafOpen = openLeaf === key;
+                      const leafGrow = leafBase + 0.08 + li * LEAF_STEP;
+                      return (
+                        <li key={key} className="relative" style={{ paddingLeft: ARM, paddingTop: ROW_PAD, paddingBottom: ROW_PAD }}>
+                          <Connector first={li === 0} last={li === branch.leaves.length - 1} delay={at(leafGrow)} />
+                          <motion.button
+                            type="button"
+                            onClick={() => leaf.detail && setOpenLeaf(leafOpen ? null : key)}
+                            aria-expanded={leaf.detail ? leafOpen : undefined}
+                            className={`w-full lg:w-72 text-left rounded-xl border px-3 py-2.5 transition-colors ${
+                              leaf.detail ? "cursor-pointer hover:border-[#3F3F46]" : "cursor-default"
+                            } ${leafOpen ? "bg-[#17171B]" : "bg-[#111114] border-[#27272A]"}`}
+                            style={{ minHeight: NODE_H, borderColor: leafOpen ? `${hue}99` : undefined }}
+                            {...nodeIn(at(leafGrow + 0.1))}
+                          >
+                            <span className="flex items-start justify-between gap-2">
+                              <span className="text-[13px] leading-5 text-[#E4E4E7]">{leaf.label}</span>
+                              {leaf.detail && (
+                                <ChevronRight
+                                  className={`w-3.5 h-3.5 mt-[3px] text-[#8B8B94] shrink-0 transition-transform duration-200 ${leafOpen ? "rotate-90" : ""}`}
+                                />
+                              )}
+                            </span>
+                            <AnimatePresence initial={false}>
+                              {leafOpen && leaf.detail && (
+                                <motion.span
+                                  className="block overflow-hidden"
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: "auto", opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.24, ease: EASE_OUT }}
+                                >
+                                  <span className="block mt-2 pt-2 border-t border-[#2E2E35] text-[13px] leading-relaxed text-[#D4D4D8]">
+                                    {leaf.detail}
+                                  </span>
+                                </motion.span>
+                              )}
+                            </AnimatePresence>
+                          </motion.button>
+                        </li>
+                      );
+                    })}
+                  </motion.ul>
+                )}
+              </AnimatePresence>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }

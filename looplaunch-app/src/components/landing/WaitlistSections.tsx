@@ -617,7 +617,7 @@ function CredSection() {
 const BY_HAND_SLIDES = [
   "1.8 years of Loop Launch: a little unhinged, fully real. With a thank-you message from a founder we worked with. #loopcrew",
   "Why we started: there was a gap between how people think marketing works and how it should actually be done. So one crazy head found a team of crazy heads. We never did “this is how it’s done”. We stayed raw and chill, and that’s exactly what our founders loved.",
-  "Month 1: everyone scared us that the first month is where you burn the most. We had everything set; loss wasn’t even a word we’d consider. 68–71% net profit from month one.",
+  "Month 1: everyone scared us that the first month is where you burn the most. We had everything set; loss wasn’t even a word we’d consider. 68-71% net profit from month one.",
   "60 days in: 5 million organic views in our first 60 days, while the algorithm was being a full-time nuisance.",
   "How we actually did it: built a community for every brand, brought in loyal customers, not just followers, went all in on organic reach first, and only the posts that won organically got ads. Result: leads up 2.3x to 2.5x.",
   "Where it worked best: food & beverage, clothing, e-commerce, education and travel, plus tech and SaaS along the way. 23+ industries and their sub-categories. Our weirdest? A semiconductor simulator class on YouTube that needed the world to care about chips. We made it happen.",

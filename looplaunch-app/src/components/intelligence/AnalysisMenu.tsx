@@ -5,14 +5,16 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion, type Variants } from "motion/react";
-import { CalendarDays, ChevronDown, Clock, Download, LogOut, Mail, Menu, Network, Plus, Settings, UserRound, X } from "lucide-react";
+import { CalendarDays, ChevronDown, Clapperboard, Clock, Download, Hash, LogOut, Mail, Menu, Network, Newspaper, Plus, Settings, Timer, UserRound, X } from "lucide-react";
 import { Avatar } from "@/components/auth/Avatar";
 import { LoopyMascot } from "@/components/loopy/LoopyMascot";
 import { FIELD } from "@/components/ui/fields";
+import { MiniTick } from "@/components/ui/MiniTick";
 import { createSupabaseBrowserClient } from "@/lib/auth/supabase-browser";
 import { profileOf } from "@/lib/auth/profile";
 import { useAuthUser } from "@/lib/auth/use-auth-user";
 import type { CalendarSettingsData } from "@/lib/calendar/types";
+import type { ContentTool } from "@/lib/intelligence/types";
 import { DEFAULT_PLAN_HOUR, PLAN_SEND_HOURS, hourLabel, type PlanEmailData } from "@/lib/plan-email/plan";
 import { toast } from "@/lib/toast";
 import { SIDEBAR_WIDTH, WIDE_QUERY, useIsWide, useMenuDocked } from "./menu-docked";
@@ -31,10 +33,18 @@ interface AnalysisMenuProps {
   strategies: StrategyAnswer[];
   /** Index of the answer whose PDF is being made, if any */
   pdfIndex: number | null;
+  /** Index of the answer whose PDF was just saved: its row shows the green tick for a moment */
+  pdfDoneIndex?: number | null;
   onDownloadPdf: (index: number) => void;
   onOpenMindMap: (index: number) => void;
   /** Signed out: show the page's login prompt */
   onNeedLogin: () => void;
+  /** Opens the content tools window at one tool */
+  onOpenContent: (tool: ContentTool) => void;
+  /** The analysis is finished, so the content tools can run */
+  contentReady: boolean;
+  /** The country the analysis searched ("India") */
+  country?: string;
 }
 
 const noopSubscribe = () => () => {};
@@ -48,7 +58,23 @@ const ROW: Variants = {
 
 const ITEM =
   "group w-full flex items-start gap-3 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer hover:bg-[#1C1C21] disabled:cursor-default disabled:hover:bg-transparent";
-const ICON = "w-4 h-4 mt-0.5 shrink-0 text-[#8B8B94] group-hover:text-[#D4D4D8] group-disabled:group-hover:text-[#8B8B94] transition-colors";
+const ICON =
+  "w-4 h-4 mt-0.5 shrink-0 text-[#8B8B94] group-hover:text-[#D4D4D8] group-disabled:group-hover:text-[#8B8B94] transition-[color,translate,rotate,scale] duration-200";
+// Each icon reacts its own way when its row is pointed at (never on a disabled row).
+const NUDGE = {
+  download: "group-hover:translate-y-[2px] group-disabled:translate-y-0",
+  mail: "group-hover:-rotate-12 group-disabled:rotate-0",
+  map: "group-hover:scale-115 group-disabled:scale-100",
+  plus: "group-hover:rotate-90",
+  clock: "group-hover:-rotate-45",
+  user: "group-hover:-translate-y-[2px]",
+  settings: "group-hover:rotate-90 duration-500",
+  logout: "group-hover:translate-x-[2px]",
+  timer: "group-hover:rotate-12 group-disabled:rotate-0",
+  videos: "group-hover:-rotate-6 group-hover:scale-110 group-disabled:rotate-0 group-disabled:scale-100",
+  news: "group-hover:-translate-y-[2px] group-disabled:translate-y-0",
+  hash: "group-hover:rotate-12 group-disabled:rotate-0",
+};
 
 function ItemText({ title, detail, muted }: { title: ReactNode; detail?: ReactNode; muted?: boolean }) {
   return (
@@ -83,7 +109,19 @@ async function loadMenuState(): Promise<{ plan: PlanEmailData; calendar: Calenda
  * Wide screens: a sidebar beside the chat, open at first; ☰ closes and reopens it (remembered).
  * Phones and small laptops: ☰ slides it over the page.
  */
-export function AnalysisMenu({ sessionId, companyName, strategies, pdfIndex, onDownloadPdf, onOpenMindMap, onNeedLogin }: AnalysisMenuProps) {
+export function AnalysisMenu({
+  sessionId,
+  companyName,
+  strategies,
+  pdfIndex,
+  pdfDoneIndex = null,
+  onDownloadPdf,
+  onOpenMindMap,
+  onNeedLogin,
+  onOpenContent,
+  contentReady,
+  country,
+}: AnalysisMenuProps) {
   const router = useRouter();
   const user = useAuthUser();
   const reduce = useReducedMotion();
@@ -106,6 +144,8 @@ export function AnalysisMenu({ sessionId, companyName, strategies, pdfIndex, onD
   const [emailOpen, setEmailOpen] = useState(false);
   const [sendHour, setSendHour] = useState(DEFAULT_PLAN_HOUR);
   const [busy, setBusy] = useState<"start" | "stop" | null>(null);
+  // Daily emails just switched on: the envelope becomes the green tick for a moment.
+  const [justStarted, setJustStarted] = useState(false);
 
   const userId = user?.id;
   // The sidebar is on screen from the start, so it loads as soon as we know who's here.
@@ -177,6 +217,8 @@ export function AnalysisMenu({ sessionId, companyName, strategies, pdfIndex, onD
       }
       setPlan({ available: true, subscription: json.subscription });
       setEmailOpen(false);
+      setJustStarted(true);
+      window.setTimeout(() => setJustStarted(false), 2600);
       toast("Day 1 is in your inbox", {
         description: `Check ${profile?.email ?? "your email"}. Day 2 arrives tomorrow at ${hourLabel(sendHour)}.`,
         tone: "success",
@@ -216,10 +258,11 @@ export function AnalysisMenu({ sessionId, companyName, strategies, pdfIndex, onD
   const emailDisabled = Boolean(user) && (!latest || !plan?.available);
 
   // ─── Google Calendar ───
-  const calendarItem = (): { title: string; detail: string; href?: string; disabled?: boolean } => {
-    if (!user) return { title: "Connect Google Calendar", detail: "Log in to add your meetings to your mornings." };
+  // Until Google verifies the app (GOOGLE_CALENDAR_LAUNCH=on), the server reports it unavailable: "Coming soon".
+  const calendarItem = (): { title: string; detail: string; href?: string; disabled?: boolean; soon?: boolean } => {
+    if (!user) return { title: "Google Calendar", detail: "Your day's meetings in a morning email.", disabled: true, soon: true };
     if (!calendar) return { title: "Google Calendar", detail: "Checking…", disabled: true };
-    if (!calendar.available) return { title: "Google Calendar", detail: "Coming soon.", disabled: true };
+    if (!calendar.available) return { title: "Google Calendar", detail: "Your day's meetings in a morning email.", disabled: true, soon: true };
     if (calendar.connection?.status === "reconnect")
       return { title: "Reconnect Google Calendar", detail: "Google stopped sharing your calendar.", href: "/api/calendar/connect" };
     if (calendar.connection)
@@ -261,11 +304,13 @@ export function AnalysisMenu({ sessionId, companyName, strategies, pdfIndex, onD
               >
                 {pdfIndex === s.index ? (
                   <span className="w-4 h-4 mt-0.5 shrink-0 border-2 border-[#B4B4BC] border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+                ) : pdfDoneIndex === s.index ? (
+                  <MiniTick size={16} className="mt-0.5" />
                 ) : (
-                  <Download className={ICON} aria-hidden="true" />
+                  <Download className={`${ICON} ${NUDGE.download}`} aria-hidden="true" />
                 )}
                 <ItemText
-                  title={pdfIndex === s.index ? "Making your PDF…" : "Download PDF"}
+                  title={pdfIndex === s.index ? "Making your PDF…" : pdfDoneIndex === s.index ? "Downloaded" : "Download PDF"}
                   detail={strategies.length > 1 ? `Your ${s.label}` : `Your ${s.label}, with its mind map`}
                 />
               </button>
@@ -276,10 +321,16 @@ export function AnalysisMenu({ sessionId, companyName, strategies, pdfIndex, onD
         {/* Daily plan email */}
         <motion.div variants={ROW}>
           {emailOn ? (
-            <div className="flex items-start gap-3 px-3 pt-2.5 pb-1">
-              <Mail className="w-4 h-4 mt-0.5 shrink-0 text-[#34D399]" aria-hidden="true" />
-              <ItemText title="Daily emails are on" detail={emailDetail()} />
-            </div>
+            <motion.div
+              key="email-on"
+              className="flex items-start gap-3 px-3 pt-2.5 pb-1"
+              initial={justStarted && !reduce ? { opacity: 0, y: -4 } : false}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, ease: EASE_OUT }}
+            >
+              {justStarted ? <MiniTick size={16} className="mt-0.5" /> : <Mail className="w-4 h-4 mt-0.5 shrink-0 text-[#34D399]" aria-hidden="true" />}
+              <ItemText title={justStarted ? "Day 1 is on its way" : "Daily emails are on"} detail={emailDetail()} />
+            </motion.div>
           ) : (
             <button
               type="button"
@@ -288,7 +339,7 @@ export function AnalysisMenu({ sessionId, companyName, strategies, pdfIndex, onD
               aria-expanded={user ? emailOpen : undefined}
               className={ITEM}
             >
-              <Mail className={ICON} aria-hidden="true" />
+              <Mail className={`${ICON} ${NUDGE.mail}`} aria-hidden="true" />
               <ItemText title="Email me each day's step" detail={emailDetail()} muted={emailDisabled} />
               {user && !emailDisabled && (
                 <ChevronDown
@@ -322,8 +373,8 @@ export function AnalysisMenu({ sessionId, companyName, strategies, pdfIndex, onD
               >
                 <div className="mx-3 mb-2 mt-1 rounded-xl bg-[#141418] border border-[#1F1F24] p-3.5">
                   <p className="text-[13px] leading-relaxed text-[#B4B4BC]">
-                    One step of this plan every morning for 7 days, sent to <span className="text-[#F4F4F5] break-all">{profile?.email}</span>. Day 1
-                    arrives right away.
+                    Every morning for 7 days: that day&apos;s step with exactly how to do it, sent to{" "}
+                    <span className="text-[#F4F4F5] break-all">{profile?.email}</span>. Day 1 arrives right away.
                   </p>
                   <label htmlFor={`plan-email-hour-${sidebarShown ? "side" : "drawer"}`} className="block mt-3 mb-1.5 text-[13px] font-medium text-[#D4D4D8]">
                     Send it at
@@ -349,7 +400,7 @@ export function AnalysisMenu({ sessionId, companyName, strategies, pdfIndex, onD
                     disabled={busy !== null}
                     className="mt-3 w-full h-10 rounded-full bg-[#F4F4F5] text-[#09090B] text-[14px] font-semibold hover:bg-white active:scale-[0.98] transition disabled:opacity-60 disabled:cursor-progress cursor-pointer"
                   >
-                    {busy === "start" ? "Sending day 1…" : subscription?.status === "active" && !onThisPlan ? "Switch to this plan" : "Start daily emails"}
+                    {busy === "start" ? "Writing your day 1 guide…" : subscription?.status === "active" && !onThisPlan ? "Switch to this plan" : "Start daily emails"}
                   </button>
                 </div>
               </motion.div>
@@ -365,9 +416,24 @@ export function AnalysisMenu({ sessionId, companyName, strategies, pdfIndex, onD
               <ItemText title={cal.title} detail={cal.detail} />
             </a>
           ) : (
-            <button type="button" onClick={user ? undefined : needLogin} disabled={Boolean(user) && cal.disabled} className={ITEM}>
+            <button type="button" disabled={cal.disabled} className={ITEM}>
               <CalendarDays className={ICON} aria-hidden="true" />
-              <ItemText title={cal.title} detail={cal.detail} muted={Boolean(user) && cal.disabled} />
+              <ItemText
+                title={
+                  cal.soon ? (
+                    <span className="flex items-center gap-2">
+                      {cal.title}
+                      <span className="shrink-0 rounded-full bg-[#1C1C21] border border-[#27272A] px-2 py-px text-[11px] font-medium text-[#B4B4BC]">
+                        Coming soon
+                      </span>
+                    </span>
+                  ) : (
+                    cal.title
+                  )
+                }
+                detail={cal.detail}
+                muted={cal.disabled}
+              />
             </button>
           )}
         </motion.div>
@@ -384,24 +450,53 @@ export function AnalysisMenu({ sessionId, companyName, strategies, pdfIndex, onD
             disabled={!latest}
             className={ITEM}
           >
-            <Network className={ICON} aria-hidden="true" />
+            <Network className={`${ICON} ${NUDGE.map}`} aria-hidden="true" />
             <ItemText title="See the mind map" detail={latest ? "Your plan at a glance." : "Once your 7-day strategy is ready."} muted={!latest} />
           </button>
         </motion.div>
 
         <div className="h-px bg-[#1C1C21] mx-3 my-3" aria-hidden="true" />
 
+        {/* ─── Content tools (SerpApi: Trends, YouTube, News, Autocomplete) ─── */}
+        <SectionLabel>Content tools</SectionLabel>
+        {(
+          [
+            { id: "time", icon: Timer, nudge: NUDGE.timer, title: "Best time to post", detail: `When people${country ? ` in ${country}` : ""} search for what you sell.` },
+            { id: "videos", icon: Clapperboard, nudge: NUDGE.videos, title: "Reference videos", detail: "Shorts and videos getting views now." },
+            { id: "news", icon: Newspaper, nudge: NUDGE.news, title: "News hooks", detail: "This month's news, turned into posts." },
+            { id: "keywords", icon: Hash, nudge: NUDGE.hash, title: "Caption keywords", detail: "What people type, for captions and hashtags." },
+          ] as const
+        ).map((t) => (
+          <motion.div key={t.id} variants={ROW}>
+            <button
+              type="button"
+              onClick={() => {
+                if (!user) return needLogin();
+                closeDrawer();
+                onOpenContent(t.id);
+              }}
+              disabled={Boolean(user) && !contentReady}
+              className={ITEM}
+            >
+              <t.icon className={`${ICON} ${t.nudge}`} aria-hidden="true" />
+              <ItemText title={t.title} detail={contentReady || !user ? t.detail : "Once your analysis is ready."} muted={Boolean(user) && !contentReady} />
+            </button>
+          </motion.div>
+        ))}
+
+        <div className="h-px bg-[#1C1C21] mx-3 my-3" aria-hidden="true" />
+
         {/* ─── Getting around ─── */}
         <motion.div variants={ROW}>
           <Link href="/new" onClick={() => setDrawerOpen(false)} className={ITEM}>
-            <Plus className={ICON} aria-hidden="true" />
+            <Plus className={`${ICON} ${NUDGE.plus}`} aria-hidden="true" />
             <ItemText title="New analysis" />
           </Link>
         </motion.div>
         {user && (
           <motion.div variants={ROW}>
             <Link href="/history" onClick={() => setDrawerOpen(false)} className={ITEM}>
-              <Clock className={ICON} aria-hidden="true" />
+              <Clock className={`${ICON} ${NUDGE.clock}`} aria-hidden="true" />
               <ItemText title="History" />
             </Link>
           </motion.div>
@@ -420,15 +515,15 @@ export function AnalysisMenu({ sessionId, companyName, strategies, pdfIndex, onD
               </div>
             </div>
             <Link href="/profile#settings-profile" onClick={() => setDrawerOpen(false)} className={`${ITEM} py-2`}>
-              <UserRound className={ICON} aria-hidden="true" />
+              <UserRound className={`${ICON} ${NUDGE.user}`} aria-hidden="true" />
               <ItemText title="Profile" />
             </Link>
             <Link href="/profile" onClick={() => setDrawerOpen(false)} className={`${ITEM} py-2`}>
-              <Settings className={ICON} aria-hidden="true" />
+              <Settings className={`${ICON} ${NUDGE.settings}`} aria-hidden="true" />
               <ItemText title="Settings" />
             </Link>
             <button type="button" onClick={signOut} className={`${ITEM} py-2`}>
-              <LogOut className={ICON} aria-hidden="true" />
+              <LogOut className={`${ICON} ${NUDGE.logout}`} aria-hidden="true" />
               <ItemText title="Log out" />
             </button>
           </>

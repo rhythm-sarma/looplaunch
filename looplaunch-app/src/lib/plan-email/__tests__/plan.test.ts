@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { latestPlan, planEmailHtml, planEmailSubject, planEmailText, planSteps } from "../plan";
+import { cleanGuide, latestPlan, planEmailHtml, planEmailSubject, planEmailText, planSteps } from "../plan";
 
 const STRATEGY = `Since your #1 headache is **not knowing what to post**, let's solve this once and for all.
 
@@ -105,5 +105,36 @@ describe("The plan email", () => {
 
   test("uses no em or en dashes", () => {
     for (const out of [planEmailText(input), planEmailHtml(input), planEmailSubject(input)]) assert.ok(!/[—–]/.test(out));
+  });
+});
+
+describe("day guides", () => {
+  const guide = {
+    goal: "Buyers trust what they see working.",
+    tasks: ["Film the pairing <live>", "Post it by 7 PM"],
+    example: { label: "Hook", text: "Line one\nLine two" },
+    time: "About 1 hour",
+    doneWhen: "Two reels are in your drafts.",
+    tip: "Keep it under 20 seconds.",
+  };
+
+  test("cleanGuide keeps a good guide and drops an empty one", () => {
+    assert.deepEqual(cleanGuide(guide), guide);
+    assert.equal(cleanGuide({ goal: "x", tasks: [] }), null);
+    assert.equal(cleanGuide("nope"), null);
+    assert.equal(cleanGuide({ goal: "x", tasks: ["a"], example: { label: "", text: "t" } })?.example, undefined);
+  });
+
+  test("the email shows the guide, escaped, and still works without one", () => {
+    const input = { company: "Apple", steps: ["Audit", "Film", "Post"], stepIndex: 1, planUrl: "https://x/p", manageUrl: "https://x/m" };
+    const html = planEmailHtml({ ...input, guide });
+    assert.match(html, /Do this today/);
+    assert.match(html, /Film the pairing &lt;live&gt;/);
+    assert.match(html, /About 1 hour/);
+    assert.match(html, /Done when:/);
+    const text = planEmailText({ ...input, guide });
+    assert.match(text, /1\. Film the pairing <live>\n2\. Post it by 7 PM/);
+    assert.match(text, /Hook:\nLine one\nLine two/);
+    assert.doesNotMatch(planEmailHtml(input), /Do this today/);
   });
 });

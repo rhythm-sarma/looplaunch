@@ -55,6 +55,23 @@ function renderInline(text: string): React.ReactNode[] {
   });
 }
 
+const LIST_LINE = /^\s*(?:[-*•]|\d+\.)\s+/;
+
+/** A block whose lines mix list items and plain text, cut into runs of each, in order. */
+function splitListRuns(block: string): string[] {
+  const lines = block.split("\n").filter((l) => l.trim());
+  if (lines.length < 2) return [block];
+  const runs: string[][] = [];
+  let wasList: boolean | null = null;
+  for (const line of lines) {
+    const isList = LIST_LINE.test(line);
+    if (isList !== wasList) runs.push([]);
+    runs[runs.length - 1].push(line);
+    wasList = isList;
+  }
+  return runs.map((r) => r.join("\n"));
+}
+
 export function MarkdownContent({
   content,
   className = "",
@@ -99,7 +116,12 @@ export function MarkdownContent({
 
   // Split by double newline to identify block elements. A heading always ends its block,
   // so text written straight under it (no blank line) isn't swallowed into the heading.
-  const blocks = activeContent.replace(/^(#{1,6}\s.*)\n(?=\S)/gm, "$1\n\n").split(/\n\s*\n/);
+  // A list written straight under a line ("**STOP**" then "- Posting…") gets its own block too,
+  // or it would show as plain lines with their "- " still on them.
+  const blocks = activeContent
+    .replace(/^(#{1,6}\s.*)\n(?=\S)/gm, "$1\n\n")
+    .split(/\n\s*\n/)
+    .flatMap(splitListRuns);
   const isTyping = animate && displayedLength < content.length;
 
   return (

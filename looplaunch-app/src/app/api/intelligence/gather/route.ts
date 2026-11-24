@@ -23,6 +23,8 @@ import { createSession, updateSession, updateStatus } from "@/lib/intelligence/s
 import { crawlWebsite, crawlResultToText } from "@/lib/crawler/website-crawler";
 import { buildBusinessProfile } from "@/lib/ai/business-profiler";
 import { runResearch } from "@/lib/research/orchestrator";
+import { runContentResearch } from "@/lib/research/content";
+import { marketFromStored } from "@/lib/research/market";
 import { buildResearchBrief } from "@/lib/ai/research-brief";
 import { analyzeMarket, answerBuyerQuestions, generateDiagnosis } from "@/lib/ai/gemini";
 
@@ -93,6 +95,12 @@ async function runPipeline(sessionId: string, input: OnboardingInput, deckText?:
     // ─── STAGE 3: Search Intel research (budgeted, cached, ledgered) ───
     await updateStatus(sessionId, "crawling_competitors", "Searching Google for your competitors, their ads and your buyers' questions...");
     const research = await runResearch(companyIntel, { sessionId });
+    // The ☰ menu's content tools (6 more searches) run alongside the AI writing below, so they
+    // add no wait, and are saved before the strategy is written so Loopy can use them.
+    const contentPromise = runContentResearch({ profile: companyIntel, market: marketFromStored(research.research.market), sessionId }).catch((e) => {
+      console.warn("[Pipeline] Content tools research failed:", e instanceof Error ? e.message : e);
+      return undefined;
+    });
     await updateSession(sessionId, { competitorIntelligence: research.competitors });
 
     // ─── STAGE 4: Market analysis + AI answers to the buyer questions ───
@@ -131,7 +139,7 @@ async function runPipeline(sessionId: string, input: OnboardingInput, deckText?:
     // Gemini answers are labelled as AI in Search Intel; Google's own answer stays in `snippet`.
     // The diagnosis is written at the same time, from the same research brief. All three are
     // written for the market the research ran in (Google India for most businesses).
-    const [marketAnalysis, answers, diagnosis] = await Promise.all([
+    const [marketAnalysis, answers, diagnosis, contentIntel] = await Promise.all([
       analyzeMarket(input, brief, research.research.market),
       answerBuyerQuestions(
         research.questions.map((q) => q.question),
@@ -139,6 +147,7 @@ async function runPipeline(sessionId: string, input: OnboardingInput, deckText?:
         research.research.market
       ),
       generateDiagnosis(companyIntel, research.competitors, { ...searchData, analysisUnavailable: true }, input),
+      contentPromise,
     ]);
     // Only the analysis fields come from Gemini; it can't overwrite collected search data.
     const { industryOverview, marketSize, growthTrends, keyPlayers, emergingTrends, customerBehaviors, regulations, opportunities, threats, analysisUnavailable } =
@@ -155,6 +164,7 @@ async function runPipeline(sessionId: string, input: OnboardingInput, deckText?:
       opportunities,
       threats,
       analysisUnavailable,
+      contentIntel,
       peopleAlsoAsk: (searchData.peopleAlsoAsk || []).map((q) => {
         const a = answers.find((x) => x.question === q.question);
         return a ? { ...q, answer: a.answer, tip: a.tip } : q;

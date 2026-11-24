@@ -13,7 +13,7 @@
 import { getSupabase } from "@/lib/db/supabase";
 
 export type Provider = "serpapi" | "tavily";
-export type Purpose = "competitor_discovery" | "competitor_ads" | "ad_library" | "market_evidence" | "location_lookup";
+export type Purpose = "competitor_discovery" | "competitor_ads" | "ad_library" | "market_evidence" | "location_lookup" | "content_signals";
 
 export interface LedgerEntry {
   provider: Provider;

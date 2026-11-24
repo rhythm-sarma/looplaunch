@@ -32,6 +32,47 @@ export interface PlanEmailData {
   subscription: PlanEmailStatus | null;
 }
 
+/**
+ * How to do one day's step: written by Loopy from the whole strategy when the emails start
+ * (src/lib/plan-email/guides.ts), so each morning's email says exactly what to do.
+ */
+export interface DayGuide {
+  /** Why today matters for this business */
+  goal: string;
+  /** 3 to 5 steps, in order */
+  tasks: string[];
+  /** Something ready to use today: a hook, caption, message, shot list */
+  example?: { label: string; text: string };
+  /** "About 1 hour" */
+  time?: string;
+  /** How they know today is done */
+  doneWhen?: string;
+  tip?: string;
+}
+
+const str = (value: unknown, max: number): string => (typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "");
+
+/** A guide as stored or as the model wrote it, checked field by field. Null if there's nothing useful in it. */
+export function cleanGuide(raw: unknown): DayGuide | null {
+  if (!raw || typeof raw !== "object") return null;
+  const g = raw as Record<string, unknown>;
+  const goal = str(g.goal, 400);
+  const tasks = (Array.isArray(g.tasks) ? g.tasks : []).map((t) => str(t, 400)).filter(Boolean).slice(0, 6);
+  if (!goal || tasks.length === 0) return null;
+  const ex = g.example && typeof g.example === "object" ? (g.example as Record<string, unknown>) : null;
+  // The example keeps its line breaks (a script or a message reads better that way).
+  const exampleText = typeof ex?.text === "string" ? ex.text.replace(/\r/g, "").replace(/\n{3,}/g, "\n\n").trim().slice(0, 900) : "";
+  const exampleLabel = str(ex?.label, 60);
+  return {
+    goal,
+    tasks,
+    example: exampleText && exampleLabel ? { label: exampleLabel, text: exampleText } : undefined,
+    time: str(g.time, 40) || undefined,
+    doneWhen: str(g.doneWhen, 300) || undefined,
+    tip: str(g.tip, 300) || undefined,
+  };
+}
+
 // ─── Finding the steps ───
 
 const DAY_ORDER = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
@@ -96,6 +137,8 @@ export interface PlanEmailInput {
   steps: string[];
   /** Which step this email is about (0 = day 1) */
   stepIndex: number;
+  /** How to do today's step, when Loopy has written it */
+  guide?: DayGuide | null;
   /** The analysis, with the whole plan */
   planUrl: string;
   /** Where to change the time or stop */
@@ -116,26 +159,63 @@ function closingLine(input: PlanEmailInput): { label: string; text: string } {
 }
 
 export function planEmailText(input: PlanEmailInput): string {
-  const { company, steps, stepIndex, planUrl, manageUrl } = input;
+  const { company, steps, stepIndex, planUrl, manageUrl, guide } = input;
   const closing = closingLine(input);
-  return [
-    `Day ${stepIndex + 1} of ${steps.length} of your plan for ${company}.`,
-    "",
-    `Today: ${steps[stepIndex]}`,
-    "",
-    `${closing.label}: ${closing.text}`,
-    "",
-    `See the whole plan: ${planUrl}`,
-    `Change the time or stop these emails: ${manageUrl}`,
-  ].join("\n");
+  const lines = [`Day ${stepIndex + 1} of ${steps.length} of your plan for ${company}.`, "", `Today: ${steps[stepIndex]}`];
+  if (guide) {
+    lines.push("", guide.goal, "", `Do this today${guide.time ? ` (${guide.time.toLowerCase()})` : ""}:`);
+    guide.tasks.forEach((task, i) => lines.push(`${i + 1}. ${task}`));
+    if (guide.example) lines.push("", `${guide.example.label}:`, guide.example.text);
+    if (guide.doneWhen) lines.push("", `Done when: ${guide.doneWhen}`);
+    if (guide.tip) lines.push(`Tip: ${guide.tip}`);
+  }
+  lines.push("", `${closing.label}: ${closing.text}`, "", `See the whole plan: ${planUrl}`, `Change the time or stop these emails: ${manageUrl}`);
+  return lines.join("\n");
 }
 
 const escapeHtml = (value: string) =>
   value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
+const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+const LABEL = "margin:0 0 10px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#6D28D9";
+
+/** The "Do this today" part: numbered steps, the ready-to-use example, and how to know it's done. */
+function guideHtml(guide: DayGuide): string {
+  const tasks = guide.tasks
+    .map(
+      (task, i) => `<tr>
+<td valign="top" style="padding:0 12px 12px 0;width:24px"><div style="width:24px;height:24px;border-radius:12px;background:#EDE9FE;color:#5B21B6;font-size:13px;font-weight:700;line-height:24px;text-align:center">${i + 1}</div></td>
+<td valign="top" style="padding:2px 0 12px;font-size:15px;line-height:22px;color:#27272A">${escapeHtml(task)}</td>
+</tr>`
+    )
+    .join("");
+  const time = guide.time
+    ? `<span style="float:right;font-size:12px;font-weight:500;letter-spacing:0;text-transform:none;color:#71717A">${escapeHtml(guide.time)}</span>`
+    : "";
+  const example = guide.example
+    ? `<div style="margin:6px 0 0;padding:16px 18px;border-radius:12px;background:#F5F3FF;border:1px solid #DDD6FE">
+<p style="${LABEL};margin-bottom:8px">${escapeHtml(guide.example.label)}</p>
+<p style="margin:0;font-size:15px;line-height:23px;color:#18181B;white-space:pre-line">${escapeHtml(guide.example.text)}</p>
+</div>`
+    : "";
+  const doneWhen = guide.doneWhen
+    ? `<p style="margin:18px 0 0;font-size:14px;line-height:21px;color:#3F3F46"><strong style="color:#047857">Done when:</strong> ${escapeHtml(guide.doneWhen)}</p>`
+    : "";
+  const tip = guide.tip
+    ? `<p style="margin:8px 0 0;font-size:14px;line-height:21px;color:#3F3F46"><strong style="color:#18181B">Tip:</strong> ${escapeHtml(guide.tip)}</p>`
+    : "";
+  return `<div style="margin:16px 0 0;padding:18px 20px 8px;border-radius:12px;background:#FFFFFF;border:1px solid #E4E4E7">
+<p style="${LABEL}">Do this today${time}</p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%">${tasks}</table>
+</div>
+${example}
+${doneWhen}
+${tip}`;
+}
+
 /** A plain, light email that reads well in any client. The step text comes from the AI, so it's escaped. */
 export function planEmailHtml(input: PlanEmailInput): string {
-  const { company, steps, stepIndex, planUrl, manageUrl } = input;
+  const { company, steps, stepIndex, planUrl, manageUrl, guide } = input;
   const closing = closingLine(input);
   // One small bar per day: filled up to today.
   const progress = steps
@@ -144,17 +224,20 @@ export function planEmailHtml(input: PlanEmailInput): string {
         `<td style="padding:0 3px 0 0"><div style="width:28px;height:4px;border-radius:2px;background:${i <= stepIndex ? "#7C3AED" : "#E4E4E7"}"></div></td>`
     )
     .join("");
+  const goal = guide ? `<p style="margin:10px 0 0;font-size:14px;line-height:21px;color:#52525B">${escapeHtml(guide.goal)}</p>` : "";
 
   return `<!DOCTYPE html><html><body style="margin:0;background:#FAFAFA">
-<div style="max-width:520px;margin:0 auto;padding:32px 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#18181B">
+<div style="max-width:560px;margin:0 auto;padding:32px 24px;font-family:${FONT};color:#18181B">
 <p style="margin:0 0 6px;font-size:13px;color:#71717A">Loop Launch · Your plan for ${escapeHtml(company)}</p>
 <h1 style="margin:0 0 12px;font-size:22px;line-height:28px;font-weight:600">Day ${stepIndex + 1} of ${steps.length}</h1>
 <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 20px"><tr>${progress}</tr></table>
 <div style="padding:18px 20px;border-radius:12px;background:#FFFFFF;border:1px solid #E4E4E7">
-<p style="margin:0 0 6px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#6D28D9">Today</p>
-<p style="margin:0;font-size:17px;line-height:26px;color:#18181B">${escapeHtml(steps[stepIndex])}</p>
+<p style="${LABEL};margin-bottom:6px">Today</p>
+<p style="margin:0;font-size:17px;line-height:26px;font-weight:600;color:#18181B">${escapeHtml(steps[stepIndex])}</p>
+${goal}
 </div>
-<p style="margin:18px 0 0;font-size:14px;line-height:21px;color:#52525B"><strong style="color:#3F3F46">${escapeHtml(closing.label)}:</strong> ${escapeHtml(closing.text)}</p>
+${guide ? guideHtml(guide) : ""}
+<p style="margin:22px 0 0;font-size:14px;line-height:21px;color:#52525B"><strong style="color:#3F3F46">${escapeHtml(closing.label)}:</strong> ${escapeHtml(closing.text)}</p>
 <p style="margin:24px 0 0"><a href="${escapeHtml(planUrl)}" style="display:inline-block;padding:11px 20px;border-radius:999px;background:#18181B;color:#FFFFFF;font-size:14px;font-weight:600;text-decoration:none">See the whole plan</a></p>
 <p style="margin:28px 0 0;font-size:13px;line-height:20px;color:#71717A">You get this because you turned on daily plan emails in Loop Launch. <a href="${escapeHtml(manageUrl)}" style="color:#71717A">Change the time or stop these emails</a>.</p>
 </div></body></html>`;

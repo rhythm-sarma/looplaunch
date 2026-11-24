@@ -38,6 +38,11 @@ export interface SlingButtonProps {
   disabled?: boolean;
   ariaLabel?: string;
   className?: string;
+  /**
+   * Patched: change this number on every send (tap, Enter key, a suggested question) and the
+   * arrow shoots up out of the pad with a short trail, then a fresh one pops back in.
+   */
+  fireKey?: number;
 }
 
 interface Sample {
@@ -91,7 +96,8 @@ const SlingButton: React.FC<SlingButtonProps> = ({
   tapSends = true,
   disabled = false,
   ariaLabel = 'Send',
-  className = ''
+  className = '',
+  fireKey
 }) => {
   const reduce = useReducedMotion();
   const R = maxPull;
@@ -114,6 +120,9 @@ const SlingButton: React.FC<SlingButtonProps> = ({
   const dotRefs = useRef<(HTMLSpanElement | null)[]>([]);
   const power = useRef(0);
   const iconRef = useRef<HTMLSpanElement>(null);
+  const shotRef = useRef<HTMLSpanElement>(null);
+  const slingFiredAt = useRef(0);
+  const lastFireKey = useRef(fireKey);
   const grip = useRef<Grip | null>(null);
   const dir = useRef({ ux: 0, uy: -1 });
   const animX = useRef<AnimationPlaybackControls | null>(null);
@@ -129,14 +138,15 @@ const SlingButton: React.FC<SlingButtonProps> = ({
   const py = useMotionValue(0);
   const padT = useMotionTemplate`translate(${px}px, ${py}px)`;
 
-  const launchDot = () => {
+  /** reach: how far the dots fly, as a share of `flight` (a tap's trail is shorter than a slingshot's) */
+  const launchDot = (reach = 1) => {
     dotPending.current = false;
     clearTimeout(dotTimer.current);
     const { ux, uy } = dir.current;
     relaxIcon();
     const base = Math.atan2(-uy, -ux);
     const cone = (spread * Math.PI) / 180;
-    const push = 0.85 + 0.35 * power.current;
+    const push = (0.85 + 0.35 * power.current) * reach;
     dotRefs.current.forEach((dot, i) => {
       if (!dot) return;
       const lead = i === 0;
@@ -167,6 +177,36 @@ const SlingButton: React.FC<SlingButtonProps> = ({
       );
     });
   };
+
+  /**
+   * The arrow dips (winding up), shoots out of the top of the pad, and a fresh one springs up from
+   * below into its place. The pad clips it, so it reads on any background.
+   */
+  const shoot = () => {
+    if (reduce) return;
+    shotRef.current?.animate(
+      [
+        { transform: 'translateY(0)', easing: 'cubic-bezier(0.3, 0, 0.6, 1)' },
+        { transform: `translateY(${size * 0.08}px)`, offset: 0.1, easing: 'cubic-bezier(0.4, 0, 1, 1)' },
+        { transform: `translateY(${-size}px)`, offset: 0.36 },
+        { transform: `translateY(${size}px)`, offset: 0.37, easing: 'cubic-bezier(0.34, 1.45, 0.64, 1)' },
+        { transform: 'translateY(0)' }
+      ],
+      { duration: 640 }
+    );
+    // A trail of dots behind it, unless the slingshot has just thrown its own.
+    if (performance.now() - slingFiredAt.current > 400) {
+      dir.current = { ux: 0, uy: 1 };
+      power.current = 0;
+      launchDot(0.45);
+    }
+  };
+  useEffect(() => {
+    if (fireKey === undefined || fireKey === lastFireKey.current) return;
+    lastFireKey.current = fireKey;
+    shoot();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fireKey]);
 
   const aimIcon = (ux: number, uy: number, dist: number) => {
     const icon = iconRef.current;
@@ -349,6 +389,7 @@ const SlingButton: React.FC<SlingButtonProps> = ({
       }
       if (!fire) relaxIcon();
       if (fire) {
+        slingFiredAt.current = performance.now();
         onSend?.();
         if (reduce) {
           setSent(true);
@@ -356,7 +397,7 @@ const SlingButton: React.FC<SlingButtonProps> = ({
         } else {
           power.current = clamp((Math.min(p, POWER_CAP) - 1) / (POWER_CAP - 1), 0, 1);
           dotPending.current = true;
-          dotTimer.current = setTimeout(launchDot, 150);
+          dotTimer.current = setTimeout(() => launchDot(), 150);
         }
       }
       settle({ x: v0x, y: v0y });
@@ -458,9 +499,11 @@ const SlingButton: React.FC<SlingButtonProps> = ({
             if (!disabled) onSend?.();
           }}
         >
-          <span className="flex h-full w-full items-center justify-center rounded-full [background:var(--sl-pad)] [color:var(--sl-icon)] [transition:transform_160ms_cubic-bezier(0.23,1,0.32,1)] group-data-[held]/pad:scale-[0.97] group-data-[armed]/pad:scale-[1.04] [@media(hover:hover)_and_(pointer:fine)]:group-hover/pad:group-not-data-[held]/pad:group-not-aria-disabled/pad:scale-[1.02] motion-reduce:transition-none motion-reduce:transform-none!">
+          <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full [background:var(--sl-pad)] [color:var(--sl-icon)] [transition:transform_160ms_cubic-bezier(0.23,1,0.32,1)] group-data-[held]/pad:scale-[0.97] group-data-[armed]/pad:scale-[1.04] [@media(hover:hover)_and_(pointer:fine)]:group-hover/pad:group-not-data-[held]/pad:group-not-aria-disabled/pad:scale-[1.02] motion-reduce:transition-none motion-reduce:transform-none!">
             <span ref={iconRef} className="inline-flex will-change-transform">
-              {children ?? <HugeiconsIcon icon={ArrowUp02Icon} size={Math.round(size * 0.4)} strokeWidth={2.2} />}
+              <span ref={shotRef} className="inline-flex">
+                {children ?? <HugeiconsIcon icon={ArrowUp02Icon} size={Math.round(size * 0.4)} strokeWidth={2.2} />}
+              </span>
             </span>
           </span>
         </button>

@@ -41,9 +41,26 @@ describe("stripDashes", () => {
     assert.equal(stripDashes(undefined), undefined);
   });
 
+  test("a spaced hyphen standing in for a dash is treated as one", () => {
+    assert.equal(stripDashes("**MON** - Post your first reel"), "**MON:** Post your first reel");
+    assert.equal(stripDashes("- Instagram Reels - post three a week"), "- Instagram Reels: post three a week");
+    assert.equal(stripDashes("The hook - the first 3 seconds - matters most."), "The hook, the first 3 seconds, matters most.");
+    assert.equal(stripDashes("Post 2 - 3 times a week"), "Post 2-3 times a week");
+    assert.equal(stripDashes("Keep it short -- one line."), "Keep it short, one line.");
+  });
+
+  test("bullets and hyphenated words keep their hyphens", () => {
+    const md = "**STOP**\n- Posting random spec sheets\n  - nested point\n- Guessing day-to-day";
+    assert.equal(stripDashes(md), md);
+    assert.equal(stripDashes("  - Reels — post daily"), "  - Reels: post daily");
+    assert.equal(stripDashes("— Post a reel"), "- Post a reel");
+  });
+
   test("no dash survives", () => {
-    const text = "**MON** — a\n— b\nc — d – e\n## f — g\n- h — i\n3–4";
-    assert.doesNotMatch(stripDashes(text), /[—–]/);
+    const text = "**MON** — a\n— b\nc — d – e\n## f — g\n- h — i\n3–4\nj ‒ k ― l\nm—n\no - p";
+    const out = stripDashes(text);
+    assert.doesNotMatch(out, /[—–‒―]/);
+    assert.doesNotMatch(out, / - /);
   });
 });
 

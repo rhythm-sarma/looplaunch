@@ -5,7 +5,7 @@
 
 import { getSupabase } from "@/lib/db/supabase";
 import { safeTimeZone } from "@/lib/calendar/agenda";
-import { DEFAULT_PLAN_HOUR, type PlanEmailStatus } from "./plan";
+import { DEFAULT_PLAN_HOUR, cleanGuide, type DayGuide, type PlanEmailStatus } from "./plan";
 
 const TABLE = "plan_emails";
 const COLUMNS = "user_id, session_id, company, steps, next_step, time_zone, send_hour, status, last_sent_on";
@@ -27,6 +27,8 @@ export interface StoredPlanEmail {
   sessionId: string;
   company: string;
   steps: string[];
+  /** How to do each step (same order as steps); null where there isn't one yet */
+  guides: (DayGuide | null)[];
   /** Index of the next step to send */
   nextStep: number;
   timeZone: string;
@@ -35,12 +37,33 @@ export interface StoredPlanEmail {
   lastSentOn: string | null;
 }
 
+/**
+ * The steps column: one item per day, { text, guide } since the day guides, or just the text
+ * for plans started before them.
+ */
+function readSteps(value: unknown): { steps: string[]; guides: (DayGuide | null)[] } {
+  const steps: string[] = [];
+  const guides: (DayGuide | null)[] = [];
+  for (const item of Array.isArray(value) ? value : []) {
+    if (typeof item === "string") {
+      steps.push(item);
+      guides.push(null);
+    } else if (item && typeof item === "object" && typeof (item as { text?: unknown }).text === "string") {
+      steps.push((item as { text: string }).text);
+      guides.push(cleanGuide((item as { guide?: unknown }).guide));
+    }
+  }
+  return { steps, guides };
+}
+
+const writeSteps = (steps: string[], guides?: (DayGuide | null)[]) => steps.map((text, i) => ({ text, guide: guides?.[i] ?? null }));
+
 function toStored(row: Row): StoredPlanEmail {
   return {
     userId: row.user_id,
     sessionId: row.session_id,
     company: row.company,
-    steps: Array.isArray(row.steps) ? row.steps.filter((s): s is string => typeof s === "string") : [],
+    ...readSteps(row.steps),
     nextStep: row.next_step ?? 0,
     timeZone: safeTimeZone(row.time_zone),
     sendHour: row.send_hour ?? DEFAULT_PLAN_HOUR,
@@ -93,6 +116,7 @@ export async function savePlanEmail(input: {
   sessionId: string;
   company: string;
   steps: string[];
+  guides?: (DayGuide | null)[] | null;
   timeZone: string;
   sendHour: number;
 }): Promise<StoredPlanEmail | null> {
@@ -105,7 +129,7 @@ export async function savePlanEmail(input: {
         user_id: input.userId,
         session_id: input.sessionId,
         company: input.company,
-        steps: input.steps,
+        steps: writeSteps(input.steps, input.guides ?? undefined),
         next_step: 0,
         time_zone: input.timeZone,
         send_hour: input.sendHour,
@@ -121,6 +145,18 @@ export async function savePlanEmail(input: {
     .single();
   if (error) logError("Saving a plan email", error);
   return data ? toStored(data as Row) : null;
+}
+
+/** Day guides written after the plan started. Only lands if it's still the same plan. */
+export async function saveGuides(userId: string, sessionId: string, steps: string[], guides: (DayGuide | null)[]) {
+  const db = getSupabase();
+  if (!db) return;
+  const { error } = await db
+    .from(TABLE)
+    .update({ steps: writeSteps(steps, guides), updated_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .eq("session_id", sessionId);
+  if (error) logError("Saving day guides", error);
 }
 
 export async function listActivePlanEmails(): Promise<StoredPlanEmail[]> {

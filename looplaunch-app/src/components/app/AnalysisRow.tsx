@@ -62,7 +62,7 @@ export function AnalysisRow({ session: s, detailed = false }: AnalysisRowProps) 
         </span>
         {detailed && (
           <span className="hidden sm:block text-right text-[13px] text-[#B4B4BC] tabular-nums">
-            {s.questionCount || "—"}
+            {s.questionCount || 0}
             <span className="sr-only"> questions asked</span>
           </span>
         )}

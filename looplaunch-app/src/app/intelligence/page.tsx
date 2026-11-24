@@ -9,11 +9,15 @@ import type {
   StatusResponse,
   PipelineStatus,
   ChatMessage,
+  ContentTool,
 } from "@/lib/intelligence/types";
 import { AnalysisMenu, type StrategyAnswer } from "@/components/intelligence/AnalysisMenu";
 import { useMenuDocked } from "@/components/intelligence/menu-docked";
 import { MindMapDialog, parseMindMap } from "@/components/intelligence/MindMap";
 import { latestPlan } from "@/lib/plan-email/plan";
+import { PlanReady } from "@/components/intelligence/PlanReady";
+import { ContentTools } from "@/components/intelligence/ContentTools";
+import { MiniTick } from "@/components/ui/MiniTick";
 import { MarkdownContent } from "@/components/intelligence/MarkdownContent";
 import { IntelligenceSidebar } from "@/components/intelligence/IntelligenceSidebar";
 import { LoopyMascot } from "@/components/loopy/LoopyMascot";
@@ -96,7 +100,8 @@ function suggestionsFor(msg: ChatMessage, company: string, has14Day: boolean): S
   const fromAi = (msg.followUpQuestions ?? []).filter((q) => !/14[- ]day/i.test(q));
   const seen = new Set(fromAi.map((q) => q.toLowerCase()));
   const extra = SUGGESTED_QUESTIONS.filter((q) => !seen.has(q.toLowerCase()));
-  const questions = [...fromAi, ...extra].slice(0, 5).map((q) => ({ label: q, prompt: q }));
+  // Three chips in all: the 14-day strategy (until it's written) and the best questions.
+  const questions = [...fromAi, ...extra].slice(0, has14Day ? 3 : 2).map((q) => ({ label: q, prompt: q }));
   return has14Day
     ? questions
     : [{ label: "Get my 14-day strategy", prompt: fourteenDayPrompt(company), primary: true }, ...questions];
@@ -121,9 +126,14 @@ function IntelligencePageContent() {
   const [baseCount, setBaseCount] = useState<number | null>(null);
   const [question, setQuestion] = useState("");
   const [isAsking, setIsAsking] = useState(false);
+  // Goes up on every question sent: the send button's arrow shoots up (SlingButton fireKey).
+  const [sendCount, setSendCount] = useState(0);
   const [error, setError] = useState("");
   const [latestStreamingMsgId, setLatestStreamingMsgId] = useState<string | null>(null);
   const [mindMapIndex, setMindMapIndex] = useState<number | null>(null);
+  // The ☰ menu's content tools window, open at one tool (null: closed)
+  const [contentTool, setContentTool] = useState<ContentTool | null>(null);
+  const closeContent = useCallback(() => setContentTool(null), []);
   // Below desktop width the conversation and the search intel take turns instead of sitting side by side.
   const [view, setView] = useState<View>("chat");
   // Each view keeps its own place on the page, so going to the search intel and back doesn't lose your spot.
@@ -270,6 +280,7 @@ function IntelligencePageContent() {
     const questionText = (explicitQuestion || question).trim();
     if (!questionText || !sessionId || isAsking) return;
     setView("chat");
+    setSendCount((n) => n + 1);
 
     const userMsgId = `user-${Date.now()}`;
     const optimisticUserMsg: ChatMessage = {
@@ -398,6 +409,16 @@ function IntelligencePageContent() {
     (isGathering || (isReady && !locked && !hasAnswer && (isAsking || messages.length === 0 || waitingForStrategy) && !error));
   const showConversation = isReady && !locked && !showInitialWait;
 
+  // The moment the first strategy lands after the wait: a "Your plan is ready" card with the green tick.
+  const [prevWaiting, setPrevWaiting] = useState(showInitialWait);
+  const [planReady, setPlanReady] = useState(false);
+  if (prevWaiting !== showInitialWait) {
+    setPrevWaiting(showInitialWait);
+    if (prevWaiting && !showInitialWait && hasAnswer) setPlanReady(true);
+  }
+  const hidePlanReady = useCallback(() => setPlanReady(false), []);
+  const strategyDay1 = planReady ? latestPlan(messages)?.steps[0] : undefined;
+
   // "Notify me when it's ready": a browser notification once the strategy lands, if the tab is in the background.
   const [notify, setNotify] = useState(false);
   const wasWaitingRef = useRef(showInitialWait);
@@ -431,9 +452,18 @@ function IntelligencePageContent() {
     toast("We'll notify you", { description: "You can switch tabs; a notification arrives when the plan is written.", tone: "info" });
   };
 
-  const copyAnswer = async (content: string) => {
+  // Small wins get the green tick for a moment: a copied answer, a saved PDF.
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [pdfDoneIndex, setPdfDoneIndex] = useState<number | null>(null);
+  const flash = (set: (fn: (v: number | null) => number | null) => void, index: number, ms: number) => {
+    set(() => index);
+    window.setTimeout(() => set((v) => (v === index ? null : v)), ms);
+  };
+
+  const copyAnswer = async (content: string, index: number) => {
     try {
       await navigator.clipboard.writeText(content);
+      flash(setCopiedIndex, index, 1800);
       toast("Answer copied", { description: "Paste it into a doc or a message; headings and lists come with it." });
     } catch {
       toast("Couldn't copy", { description: "Your browser blocked the clipboard. Select the text and copy it instead.", tone: "error" });
@@ -468,6 +498,7 @@ function IntelligencePageContent() {
         },
         builtIn || "answer"
       );
+      flash(setPdfDoneIndex, index, 2600);
       toast("PDF downloaded", { description: "Your plan is in your downloads, with its mind map on the last page." });
     } catch (err) {
       console.error("[PDF] Couldn't make the PDF:", err);
@@ -514,7 +545,11 @@ function IntelligencePageContent() {
             companyName={companyName}
             strategies={strategies}
             pdfIndex={pdfIndex}
+            pdfDoneIndex={pdfDoneIndex}
             onDownloadPdf={downloadPdf}
+            onOpenContent={setContentTool}
+            contentReady={isReady}
+            country={status?.searchIntel?.market?.country}
             onOpenMindMap={setMindMapIndex}
             onNeedLogin={() => askToLogIn("results")}
           />
@@ -725,12 +760,14 @@ function IntelligencePageContent() {
                   }
 
                   if (isUser) {
+                    // A new question pops up from the question bar, from its bottom-right corner.
                     return (
                       <motion.div
                         key={index}
-                        initial={animateIn ? { opacity: 0, y: 10 } : false}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={ARRIVE}
+                        initial={animateIn ? { opacity: 0, y: 22, scale: 0.92 } : false}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{ type: "spring", duration: 0.5, bounce: 0.28 }}
+                        style={{ transformOrigin: "100% 100%" }}
                         className="flex justify-end pt-2"
                       >
                         <div className="bg-[#1C1C21] text-[#F4F4F5] rounded-2xl rounded-tr-md px-4 py-2.5 max-w-[85%] sm:max-w-[78%]">
@@ -756,7 +793,7 @@ function IntelligencePageContent() {
                       {/* Advisor badge & timestamp */}
                       <div className="flex items-center justify-between text-[12px] text-[#B4B4BC]">
                         <div className="flex items-center gap-2">
-                          <LoopyMascot size={22} mood="still" />
+                          <LoopyMascot size={22} mood={animateIn ? "cheer" : "still"} />
                           <span className="font-semibold text-[#F4F4F5] text-[14px]">Loopy</span>
                         </div>
                         <div className="flex items-center gap-1">
@@ -771,11 +808,11 @@ function IntelligencePageContent() {
                           <Tip label="Copy answer">
                             <button
                               type="button"
-                              onClick={() => copyAnswer(msg.content)}
-                              aria-label="Copy answer"
+                              onClick={() => copyAnswer(msg.content, index)}
+                              aria-label={copiedIndex === index ? "Copied" : "Copy answer"}
                               className="w-8 h-8 rounded-full flex items-center justify-center text-[#8B8B94] hover:text-[#F4F4F5] hover:bg-[#1C1C21] active:scale-90 transition cursor-pointer"
                             >
-                              <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                              {copiedIndex === index ? <MiniTick size={16} /> : <Copy className="w-3.5 h-3.5" aria-hidden="true" />}
                             </button>
                           </Tip>
                         </div>
@@ -855,8 +892,8 @@ function IntelligencePageContent() {
                         {/* Mind map, PDF download + suggested next questions */}
                         <div className="mt-5 space-y-3">
                           <div className="flex flex-wrap gap-2">
-                            <button type="button" onClick={() => setMindMapIndex(index)} className={SECONDARY_INLINE}>
-                              <Network className="w-4 h-4 text-[#B4B4BC]" aria-hidden="true" />
+                            <button type="button" onClick={() => setMindMapIndex(index)} className={`group ${SECONDARY_INLINE}`}>
+                              <Network className="w-4 h-4 text-[#B4B4BC] transition-transform duration-200 group-hover:scale-115" aria-hidden="true" />
                               See it as a mind map
                             </button>
                             <button
@@ -864,15 +901,20 @@ function IntelligencePageContent() {
                               onClick={() => downloadPdf(index)}
                               disabled={pdfIndex !== null}
                               aria-busy={pdfIndex === index}
-                              className={`${SECONDARY_INLINE} disabled:opacity-60 disabled:cursor-progress`}
+                              className={`group ${SECONDARY_INLINE} disabled:opacity-60 disabled:cursor-progress`}
                             >
                               {pdfIndex === index ? (
                                 <span className="w-4 h-4 border-2 border-[#B4B4BC] border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+                              ) : pdfDoneIndex === index ? (
+                                <MiniTick size={16} />
                               ) : (
-                                <Download className="w-4 h-4 text-[#B4B4BC]" aria-hidden="true" />
+                                <Download className="w-4 h-4 text-[#B4B4BC] transition-transform duration-200 group-hover:translate-y-[2px]" aria-hidden="true" />
                               )}
-                              <span key={pdfIndex === index ? "busy" : "idle"} className="ll-swap">
-                                {pdfIndex === index ? "Making your PDF…" : "Download PDF"}
+                              <span
+                                key={pdfIndex === index ? "busy" : pdfDoneIndex === index ? "done" : "idle"}
+                                className={`ll-swap ${pdfDoneIndex === index ? "text-[#34D399]" : ""}`}
+                              >
+                                {pdfIndex === index ? "Making your PDF…" : pdfDoneIndex === index ? "Downloaded" : "Download PDF"}
                               </span>
                             </button>
                           </div>
@@ -887,14 +929,17 @@ function IntelligencePageContent() {
                                     onClick={() => handleAsk(fq.prompt)}
                                     disabled={isAsking}
                                     style={{ "--d": `${0.2 + fi * 0.05}s` } as React.CSSProperties}
-                                    className={`ll-rise text-[13px] min-h-9 px-3.5 py-1.5 rounded-full active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-1 cursor-pointer text-left ${
+                                    className={`group ll-rise text-[13px] min-h-9 px-3.5 py-1.5 rounded-full active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-1 cursor-pointer text-left ${
                                       fq.primary
                                         ? "bg-[#F4F4F5] text-[#09090B] font-semibold hover:bg-white"
                                         : "bg-[#1C1C21] hover:bg-[#232329] text-[#D4D4D8] hover:text-[#F4F4F5]"
                                     }`}
                                   >
                                     <span>{fq.label}</span>
-                                    <ChevronRight className="w-3.5 h-3.5 opacity-50 shrink-0" aria-hidden="true" />
+                                    <ChevronRight
+                                      className="w-3.5 h-3.5 opacity-50 shrink-0 transition-transform duration-200 group-hover:translate-x-[3px] group-disabled:translate-x-0"
+                                      aria-hidden="true"
+                                    />
                                   </button>
                                 ))}
                               </div>
@@ -970,6 +1015,12 @@ function IntelligencePageContent() {
             menuDocked ? "xl:left-[272px]" : ""
           }`}
         >
+          <PlanReady
+            show={planReady}
+            title={`Your plan for ${companyName} is ready`}
+            detail={strategyDay1 ? `Day 1: ${strategyDay1}` : undefined}
+            onDone={hidePlanReady}
+          />
           <div className="max-w-3xl mx-auto w-full">
             {error && (
               <div role="alert" className="mb-2 pl-3.5 pr-1.5 py-1.5 rounded-xl bg-[#1C1C21] text-[13px] text-[#F87171] flex items-center justify-between gap-2">
@@ -1037,6 +1088,7 @@ function IntelligencePageContent() {
                       wellColor="#1C1C21"
                       bandColor="#52525B"
                       particles={10}
+                      fireKey={sendCount}
                     />
                   </span>
                 </div>
@@ -1066,6 +1118,15 @@ function IntelligencePageContent() {
               ? `See what ${possessive(companyName)} buyers ask Google, the ads running in this market, and who you're up against.`
               : `Log in to ask Loopy follow-up questions about ${companyName} and save this analysis to your History.`
         }
+      />
+
+      <ContentTools
+        tool={contentTool}
+        onToolChange={setContentTool}
+        onClose={closeContent}
+        sessionId={sessionId}
+        companyName={companyName}
+        onAsk={(prompt) => handleAsk(prompt)}
       />
 
       {mindMapData && (

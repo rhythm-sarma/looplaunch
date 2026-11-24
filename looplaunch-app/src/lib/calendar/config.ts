@@ -45,10 +45,18 @@ export function whatsappSender(): WhatsAppSender | null {
   };
 }
 
-/** What's set up on this server: connecting needs the Google client and the token key. */
+/**
+ * Google only lets test users connect until it has verified the app, so the feature shows as
+ * "Coming soon" everywhere until GOOGLE_CALENDAR_LAUNCH=on. Flip it once Google approves.
+ */
+export function calendarLaunched(): boolean {
+  return env("GOOGLE_CALENDAR_LAUNCH").toLowerCase() === "on";
+}
+
+/** What's set up on this server: connecting needs the launch switch, the Google client and the token key. */
 export function calendarFeatures(): { connect: boolean; channels: Record<AgendaChannel, boolean> } {
   return {
-    connect: Boolean(googleClient() && tokenKeyFromEnv()),
+    connect: Boolean(calendarLaunched() && googleClient() && tokenKeyFromEnv()),
     channels: { email: Boolean(emailSender()), whatsapp: Boolean(whatsappSender()) },
   };
 }

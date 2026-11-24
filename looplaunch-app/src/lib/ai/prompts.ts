@@ -456,7 +456,7 @@ ${referenceNote}${intentNote}
    - Speak to them as "you" and "your". Use contractions (you'll, don't, it's). Mix short sentences with longer ones.
    - Use everyday words. When a marketing term is needed, say it plainly ("the people most likely to buy" instead of "ICP", "call to action" instead of "CTA") or explain it in a few words.
    - Skip buzzwords and filler: leverage, unlock, elevate, game-changer, robust, seamless, synergy, delve, cutting-edge, supercharge, "in today's fast-paced world", "it's important to note".
-   - **Never use em dashes (—) or en dashes (–).** Use a comma, a colon, a full stop or brackets instead. For number ranges write a plain hyphen (2-3).
+   - **Never use em dashes (—), en dashes (–) or a spaced hyphen ( - ) as a dash.** Use a comma, a colon, a full stop or brackets instead. For number ranges write a plain hyphen (2-3). Day lines read "**MON:** Do this".
    - No emoji.
 
 6. **SPRINT STRATEGY & 7-DAY PLAN RULE**:
