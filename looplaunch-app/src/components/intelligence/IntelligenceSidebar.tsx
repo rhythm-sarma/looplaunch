@@ -69,6 +69,9 @@ function fmtDate(iso?: string): string {
   return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
 }
 
+/** Buyer questions shown before "Show all" */
+const QUESTIONS_SHOWN = 5;
+
 /** The picked tab or chip slides to its new place; the list under it swaps with a short fade and lift. */
 const SLIDE = { type: "spring", stiffness: 500, damping: 40 } as const;
 const SWAP = {
@@ -183,6 +186,9 @@ export function IntelligenceSidebar({ intel, companyName, sessionId, onAsk, isAs
   const [filter, setFilter] = useState<"all" | CompetitorCategory>("all");
   const [openScore, setOpenScore] = useState<string | null>(null);
   const [showNotes, setShowNotes] = useState(false);
+  // Less at once: five buyer questions, and the extra Google lists folded until asked for
+  const [showAllQuestions, setShowAllQuestions] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const { questions, competitors, adLibrary, counts } = intel;
   const status = statusOf(intel);
@@ -223,6 +229,110 @@ export function IntelligenceSidebar({ intel, companyName, sessionId, onAsk, isAs
     setOpenQuestion(q.id);
     const existing = answers[q.id];
     if (!q.googleAnswer && !q.aiAnswer && (!existing || existing.state === "error")) fetchAnswer(q.id, q.question);
+  };
+
+  const renderQuestion = (q: SearchIntelView["questions"][number]) => {
+    const open = openQuestion === q.id;
+    const fetched = answers[q.id];
+    const ai = q.aiAnswer ?? (fetched?.state === "done" ? { text: fetched.answer, tip: fetched.tip } : undefined);
+    return (
+      <div
+        key={q.id}
+        className={`rounded-xl border transition-colors ${
+          open ? "bg-[#232329] border-transparent" : "bg-[#1C1C21] border-transparent hover:bg-[#232329]"
+        }`}
+      >
+        <button
+          onClick={() => toggleQuestion(q)}
+          aria-expanded={open}
+          className="w-full px-3 py-2.5 flex items-start justify-between gap-2 text-left cursor-pointer"
+        >
+          <span className="text-[13px] font-medium text-[#F4F4F5] leading-snug">{q.question}</span>
+          <ChevronDown className={`w-4 h-4 text-[#8B8B94] shrink-0 mt-0.5 transition-transform ${open ? "rotate-180" : ""}`} />
+        </button>
+
+        <AnimatePresence initial={false}>
+          {open && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div className="px-3 pb-3 space-y-2.5">
+                {q.googleAnswer && (
+                  <div>
+                    <p className="text-[12px] font-medium text-[#8B8B94] mb-1">From Google</p>
+                    <p className="text-[13px] text-[#D4D4D8] leading-relaxed whitespace-pre-line">{q.googleAnswer.text}</p>
+                  </div>
+                )}
+
+                {!q.googleAnswer && !ai && (!fetched || fetched.state === "loading") && (
+                  <p className="flex items-start gap-2 py-1 text-[13px] text-[#B4B4BC] leading-relaxed" role="status">
+                    <span className="mt-[3px] w-3.5 h-3.5 border-2 border-[#B4B4BC] border-t-transparent rounded-full animate-spin shrink-0" aria-hidden="true" />
+                    Google showed no answer, so Loopy is writing one. This can take up to 20 seconds.
+                  </p>
+                )}
+
+                {fetched?.state === "error" && !ai && (
+                  <div className="flex items-center justify-between gap-2 text-[12px] text-[#B4B4BC]">
+                    <span>{fetched.message}</span>
+                    <button
+                      onClick={() => fetchAnswer(q.id, q.question)}
+                      className="inline-flex items-center gap-1 text-[#F4F4F5] hover:underline cursor-pointer shrink-0"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Retry
+                    </button>
+                  </div>
+                )}
+
+                {ai && (
+                  <div>
+                    <p className="text-[12px] font-medium text-[#8B8B94] mb-1">Loopy&apos;s answer (AI, not from Google)</p>
+                    {!q.googleAnswer && <p className="text-[13px] text-[#D4D4D8] leading-relaxed whitespace-pre-line">{ai.text}</p>}
+                    {ai.tip && (
+                      <p className="mt-1.5 text-[12px] text-[#F4F4F5] leading-relaxed pl-2.5 border-l-2 border-[#3F3F48]">
+                        <span className="text-[#F4F4F5] font-semibold">Use it: </span>
+                        {ai.tip}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-0.5 text-[12px]">
+                  {onAsk && (
+                    <button
+                      onClick={() =>
+                        onAsk(
+                          `Buyers ask Google: "${q.question}". How should ${companyName} answer this in our content and on our website? Give me a ready-to-post answer and a short video idea.`
+                        )
+                      }
+                      disabled={isAsking}
+                      className="inline-flex items-center gap-1.5 text-[#F4F4F5] font-medium hover:underline disabled:opacity-40 cursor-pointer"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5" />
+                      Turn into content
+                    </button>
+                  )}
+                  <a
+                    href={q.googleAnswer?.sourceUrl || googleSearch(q.question)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[#B4B4BC] hover:text-[#F4F4F5]"
+                  >
+                    {q.googleAnswer?.sourceUrl ? q.googleAnswer.sourceTitle || domainOf(q.googleAnswer.sourceUrl) : "See on Google"}
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+                {q.sourceQuery && <p className="text-[12px] text-[#8B8B94]">Google showed this for “{q.sourceQuery}”</p>}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
   };
 
   const tabs: { id: Tab; count: number; label: string }[] = [
@@ -304,181 +414,143 @@ export function IntelligenceSidebar({ intel, companyName, sessionId, onAsk, isAs
                   <Empty>Google didn&apos;t show buyer questions for these searches.</Empty>
                 ) : (
                   <div className="space-y-1.5">
-                    {questions.map((q) => {
-                      const open = openQuestion === q.id;
-                      const fetched = answers[q.id];
-                      const ai = q.aiAnswer ?? (fetched?.state === "done" ? { text: fetched.answer, tip: fetched.tip } : undefined);
-                      return (
-                        <div
-                          key={q.id}
-                          className={`rounded-xl border transition-colors ${
-                            open ? "bg-[#232329] border-transparent" : "bg-[#1C1C21] border-transparent hover:bg-[#232329]"
-                          }`}
+                    {questions.slice(0, QUESTIONS_SHOWN).map(renderQuestion)}
+                    {/* The rest unfold under the first five */}
+                    <AnimatePresence initial={false}>
+                      {showAllQuestions && questions.length > QUESTIONS_SHOWN && (
+                        <motion.div
+                          key="more-questions"
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+                          className="overflow-hidden"
                         >
-                          <button
-                            onClick={() => toggleQuestion(q)}
-                            aria-expanded={open}
-                            className="w-full px-3 py-2.5 flex items-start justify-between gap-2 text-left cursor-pointer"
-                          >
-                            <span className="text-[13px] font-medium text-[#F4F4F5] leading-snug">{q.question}</span>
-                            <ChevronDown className={`w-4 h-4 text-[#8B8B94] shrink-0 mt-0.5 transition-transform ${open ? "rotate-180" : ""}`} />
-                          </button>
-
-                          <AnimatePresence initial={false}>
-                            {open && (
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: "auto", opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                transition={{ duration: 0.2 }}
-                                className="overflow-hidden"
-                              >
-                                <div className="px-3 pb-3 space-y-2.5">
-                                  {q.googleAnswer && (
-                                    <div>
-                                      <p className="text-[12px] font-medium text-[#8B8B94] mb-1">From Google</p>
-                                      <p className="text-[13px] text-[#D4D4D8] leading-relaxed whitespace-pre-line">{q.googleAnswer.text}</p>
-                                    </div>
-                                  )}
-
-                                  {!q.googleAnswer && !ai && (!fetched || fetched.state === "loading") && (
-                                    <p className="flex items-start gap-2 py-1 text-[13px] text-[#B4B4BC] leading-relaxed" role="status">
-                                      <span className="mt-[3px] w-3.5 h-3.5 border-2 border-[#B4B4BC] border-t-transparent rounded-full animate-spin shrink-0" aria-hidden="true" />
-                                      Google showed no answer, so Loopy is writing one. This can take up to 20 seconds.
-                                    </p>
-                                  )}
-
-                                  {fetched?.state === "error" && !ai && (
-                                    <div className="flex items-center justify-between gap-2 text-[12px] text-[#B4B4BC]">
-                                      <span>{fetched.message}</span>
-                                      <button
-                                        onClick={() => fetchAnswer(q.id, q.question)}
-                                        className="inline-flex items-center gap-1 text-[#F4F4F5] hover:underline cursor-pointer shrink-0"
-                                      >
-                                        <RotateCcw className="w-3 h-3" />
-                                        Retry
-                                      </button>
-                                    </div>
-                                  )}
-
-                                  {ai && (
-                                    <div>
-                                      <p className="text-[12px] font-medium text-[#8B8B94] mb-1">Loopy&apos;s answer (AI, not from Google)</p>
-                                      {!q.googleAnswer && <p className="text-[13px] text-[#D4D4D8] leading-relaxed whitespace-pre-line">{ai.text}</p>}
-                                      {ai.tip && (
-                                        <p className="mt-1.5 text-[12px] text-[#F4F4F5] leading-relaxed pl-2.5 border-l-2 border-[#3F3F48]">
-                                          <span className="text-[#F4F4F5] font-semibold">Use it: </span>
-                                          {ai.tip}
-                                        </p>
-                                      )}
-                                    </div>
-                                  )}
-
-                                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-0.5 text-[12px]">
-                                    {onAsk && (
-                                      <button
-                                        onClick={() =>
-                                          onAsk(
-                                            `Buyers ask Google: "${q.question}". How should ${companyName} answer this in our content and on our website? Give me a ready-to-post answer and a short video idea.`
-                                          )
-                                        }
-                                        disabled={isAsking}
-                                        className="inline-flex items-center gap-1.5 text-[#F4F4F5] font-medium hover:underline disabled:opacity-40 cursor-pointer"
-                                      >
-                                        <MessageCircle className="w-3.5 h-3.5" />
-                                        Turn into content
-                                      </button>
-                                    )}
-                                    <a
-                                      href={q.googleAnswer?.sourceUrl || googleSearch(q.question)}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1 text-[#B4B4BC] hover:text-[#F4F4F5]"
-                                    >
-                                      {q.googleAnswer?.sourceUrl ? q.googleAnswer.sourceTitle || domainOf(q.googleAnswer.sourceUrl) : "See on Google"}
-                                      <ExternalLink className="w-3 h-3" />
-                                    </a>
-                                  </div>
-                                  {q.sourceQuery && <p className="text-[12px] text-[#8B8B94]">Google showed this for “{q.sourceQuery}”</p>}
-                                </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                      );
-                    })}
+                          <div className="space-y-1.5">{questions.slice(QUESTIONS_SHOWN).map(renderQuestion)}</div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
+                )}
+                {questions.length > QUESTIONS_SHOWN && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllQuestions((v) => !v)}
+                    aria-expanded={showAllQuestions}
+                    className="mt-2.5 inline-flex items-center gap-1 text-[12px] text-[#B4B4BC] hover:text-[#F4F4F5] cursor-pointer"
+                  >
+                    {showAllQuestions ? "Show fewer" : `Show all ${questions.length}`}
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAllQuestions ? "rotate-180" : ""}`} aria-hidden="true" />
+                  </button>
                 )}
               </section>
 
-              {intel.searches.length > 0 && (
+              {(intel.searches.length > 0 || intel.organic.length > 0 || intel.shopping.length > 0) && (
                 <section>
-                  <SectionLabel hint={intel.cachedSearches ? `${intel.cachedSearches} reused from earlier` : undefined}>What we searched</SectionLabel>
-                  <div className="space-y-1">
-                    {intel.searches.map((s, idx) => (
-                      <a
-                        key={idx}
-                        href={s.purpose === "ad_library" ? `https://adstransparency.google.com/?domain=${encodeURIComponent(s.query)}` : googleSearch(s.query)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-[#1C1C21] hover:bg-[#232329] transition-colors group"
+                  <button
+                    type="button"
+                    onClick={() => setMoreOpen((v) => !v)}
+                    aria-expanded={moreOpen}
+                    className="w-full flex items-baseline justify-between gap-2 text-left cursor-pointer group"
+                  >
+                    <span className="inline-flex items-center gap-1 text-[14px] font-semibold text-[#F4F4F5]">
+                      More from Google
+                      <ChevronDown className={`w-4 h-4 text-[#8B8B94] transition-transform duration-200 ${moreOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+                    </span>
+                    <span className="text-[12px] text-[#8B8B94] shrink-0 group-hover:text-[#B4B4BC] transition-colors">
+                      {[
+                        intel.searches.length ? `${intel.searches.length} searches` : "",
+                        intel.organic.length ? `${intel.organic.length} sites` : "",
+                        intel.shopping.length ? `${intel.shopping.length} products` : "",
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </span>
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {moreOpen && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+                        className="overflow-hidden"
                       >
-                        <span className="flex items-center gap-2 min-w-0">
-                          <Search className="w-3.5 h-3.5 text-[#8B8B94] shrink-0" />
-                          <span className="text-[13px] text-[#D4D4D8] truncate group-hover:text-[#F4F4F5]">{s.query}</span>
-                        </span>
-                        <span className={`text-[12px] shrink-0 ${s.ok ? "text-[#8B8B94]" : "text-[#F87171]"}`}>
-                          {s.ok ? PURPOSE_LABEL[s.purpose] || s.purpose : "Failed"}
-                        </span>
-                      </a>
-                    ))}
-                  </div>
-                </section>
-              )}
+                        <div className="pt-4 space-y-6">
+                      {intel.searches.length > 0 && (
+                        <section>
+                          <SectionLabel hint={intel.cachedSearches ? `${intel.cachedSearches} reused from earlier` : undefined}>What we searched</SectionLabel>
+                          <div className="space-y-1">
+                            {intel.searches.map((s, idx) => (
+                              <a
+                                key={idx}
+                                href={s.purpose === "ad_library" ? `https://adstransparency.google.com/?domain=${encodeURIComponent(s.query)}` : googleSearch(s.query)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-[#1C1C21] hover:bg-[#232329] transition-colors group"
+                              >
+                                <span className="flex items-center gap-2 min-w-0">
+                                  <Search className="w-3.5 h-3.5 text-[#8B8B94] shrink-0" />
+                                  <span className="text-[13px] text-[#D4D4D8] truncate group-hover:text-[#F4F4F5]">{s.query}</span>
+                                </span>
+                                <span className={`text-[12px] shrink-0 ${s.ok ? "text-[#8B8B94]" : "text-[#F87171]"}`}>
+                                  {s.ok ? PURPOSE_LABEL[s.purpose] || s.purpose : "Failed"}
+                                </span>
+                              </a>
+                            ))}
+                          </div>
+                        </section>
+                      )}
 
-              {intel.organic.length > 0 && (
-                <section>
-                  <SectionLabel hint="Unpaid results">Who ranks on Google</SectionLabel>
-                  <ol className="space-y-1">
-                    {intel.organic.map((o, idx) => (
-                      <li key={idx}>
-                        <a href={o.link} target="_blank" rel="noopener noreferrer" className="flex gap-2.5 px-3 py-2 rounded-lg hover:bg-[#1C1C21] transition-colors group">
-                          <span className="text-[12px] font-semibold text-[#8B8B94] tabular-nums w-4 shrink-0 pt-px">{o.position}</span>
-                          <span className="min-w-0">
-                            <span className="block text-[13px] text-[#F4F4F5] leading-snug line-clamp-2 group-hover:underline">{o.title}</span>
-                            <span className="block text-[12px] text-[#8B8B94] truncate mt-0.5">{o.domain}</span>
-                          </span>
-                        </a>
-                      </li>
-                    ))}
-                  </ol>
-                </section>
-              )}
+                      {intel.organic.length > 0 && (
+                        <section>
+                          <SectionLabel hint="Unpaid results">Who ranks on Google</SectionLabel>
+                          <ol className="space-y-1">
+                            {intel.organic.map((o, idx) => (
+                              <li key={idx}>
+                                <a href={o.link} target="_blank" rel="noopener noreferrer" className="flex gap-2.5 px-3 py-2 rounded-lg hover:bg-[#1C1C21] transition-colors group">
+                                  <span className="text-[12px] font-semibold text-[#8B8B94] tabular-nums w-4 shrink-0 pt-px">{o.position}</span>
+                                  <span className="min-w-0">
+                                    <span className="block text-[13px] text-[#F4F4F5] leading-snug line-clamp-2 group-hover:underline">{o.title}</span>
+                                    <span className="block text-[12px] text-[#8B8B94] truncate mt-0.5">{o.domain}</span>
+                                  </span>
+                                </a>
+                              </li>
+                            ))}
+                          </ol>
+                        </section>
+                      )}
 
-              {intel.shopping.length > 0 && (
-                <section>
-                  <SectionLabel hint="Google Shopping">Products shown to buyers</SectionLabel>
-                  <div className="space-y-1">
-                    {intel.shopping.map((p, idx) => (
-                      <a
-                        key={idx}
-                        href={p.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[#1C1C21] hover:bg-[#232329] transition-colors"
-                      >
-                        {p.thumbnail && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={p.thumbnail} alt="" className="w-9 h-9 rounded-md object-cover bg-[#27272A] shrink-0" />
-                        )}
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-[12px] text-[#F4F4F5] truncate">{p.title}</span>
-                          {p.source && <span className="block text-[12px] text-[#8B8B94] truncate">{p.source}</span>}
-                        </span>
-                        {p.price && <span className="text-[13px] font-semibold text-[#F4F4F5] shrink-0">{p.price}</span>}
-                      </a>
-                    ))}
-                  </div>
+                      {intel.shopping.length > 0 && (
+                        <section>
+                          <SectionLabel hint="Google Shopping">Products shown to buyers</SectionLabel>
+                          <div className="space-y-1">
+                            {intel.shopping.map((p, idx) => (
+                              <a
+                                key={idx}
+                                href={p.link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[#1C1C21] hover:bg-[#232329] transition-colors"
+                              >
+                                {p.thumbnail && (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={p.thumbnail} alt="" className="w-9 h-9 rounded-md object-cover bg-[#27272A] shrink-0" />
+                                )}
+                                <span className="min-w-0 flex-1">
+                                  <span className="block text-[12px] text-[#F4F4F5] truncate">{p.title}</span>
+                                  {p.source && <span className="block text-[12px] text-[#8B8B94] truncate">{p.source}</span>}
+                                </span>
+                                {p.price && <span className="text-[13px] font-semibold text-[#F4F4F5] shrink-0">{p.price}</span>}
+                              </a>
+                            ))}
+                          </div>
+                        </section>
+                      )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </section>
               )}
             </>

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { motion, AnimatePresence, MotionConfig } from "motion/react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Copy, Download, ExternalLink, ChevronRight, RotateCcw, Network, Lock, X } from "lucide-react";
+import { Copy, Download, ExternalLink, ChevronDown, ChevronRight, RotateCcw, Network, Lock, X } from "lucide-react";
 import type {
   StatusResponse,
   PipelineStatus,
@@ -131,6 +131,8 @@ function IntelligencePageContent() {
   const [error, setError] = useState("");
   const [latestStreamingMsgId, setLatestStreamingMsgId] = useState<string | null>(null);
   const [mindMapIndex, setMindMapIndex] = useState<number | null>(null);
+  // "What this is based on" under each answer starts folded; these are the ones opened (by answer key)
+  const [basisOpen, setBasisOpen] = useState<Record<string, boolean>>({});
   // The ☰ menu's content tools window, open at one tool (null: closed)
   const [contentTool, setContentTool] = useState<ContentTool | null>(null);
   const closeContent = useCallback(() => setContentTool(null), []);
@@ -549,7 +551,6 @@ function IntelligencePageContent() {
             onDownloadPdf={downloadPdf}
             onOpenContent={setContentTool}
             contentReady={isReady}
-            country={status?.searchIntel?.market?.country}
             onOpenMindMap={setMindMapIndex}
             onNeedLogin={() => askToLogIn("results")}
           />
@@ -828,66 +829,93 @@ function IntelligencePageContent() {
                           animate={msg.id === latestStreamingMsgId}
                         />
 
-                        {/* Supporting Evidence */}
-                        {msg.evidence && msg.evidence.length > 0 && (
-                          <div className="mt-5 pt-4 border-t border-[#1F1F24] space-y-2.5">
-                            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                              <span className="text-[14px] text-[#D4D4D8] font-medium">What this is based on</span>
-                              {msg.researchStatus === "success" && (
-                                <span className="text-[12px] text-[#8B8B94]">Checked against live web research</span>
-                              )}
+                        {/* What this is based on + sources: folded into one row until opened */}
+                        {((msg.evidence?.length ?? 0) > 0 || (msg.sources?.length ?? 0) > 0) && (() => {
+                          const key = msg.id || String(index);
+                          const open = Boolean(basisOpen[key]);
+                          const count = (msg.evidence?.length ?? 0) + (msg.sources?.length ?? 0);
+                          return (
+                            <div className="mt-5 pt-4 border-t border-[#1F1F24]">
+                              <button
+                                type="button"
+                                onClick={() => setBasisOpen((b) => ({ ...b, [key]: !b[key] }))}
+                                aria-expanded={open}
+                                className="w-full flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-left cursor-pointer group"
+                              >
+                                <span className="inline-flex items-center gap-1.5 text-[14px] text-[#D4D4D8] font-medium group-hover:text-[#F4F4F5] transition-colors">
+                                  What this is based on
+                                  <span className="text-[#8B8B94] font-normal tabular-nums">({count})</span>
+                                  <ChevronDown className={`w-4 h-4 text-[#8B8B94] transition-transform duration-200 ${open ? "rotate-180" : ""}`} aria-hidden="true" />
+                                </span>
+                                {msg.researchStatus === "success" && (
+                                  <span className="text-[12px] text-[#8B8B94]">Checked against live web research</span>
+                                )}
+                              </button>
+                              <AnimatePresence initial={false}>
+                                {open && (
+                                  <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: "auto", opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+                                    className="overflow-hidden"
+                                  >
+                                    {msg.evidence && msg.evidence.length > 0 && (
+                                      <div className="pt-2.5">
+                                        <div className="space-y-2">
+                                          {msg.evidence.map((ev, ei) => (
+                                            <div key={ei} className="bg-[#111114] rounded-[14px] px-4 py-3 text-[13px] space-y-1 [overflow-wrap:anywhere]">
+                                              <p className="text-[#D4D4D8] leading-relaxed">{ev.insight}</p>
+                                              {ev.url ? (
+                                                <div className="flex items-center gap-1 min-w-0 text-[12px] text-[#8B8B94]">
+                                                  <span className="shrink-0">Source:</span>
+                                                  <a
+                                                    href={ev.url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-[#B4B4BC] hover:text-[#F4F4F5] underline underline-offset-2 truncate flex items-center gap-1 max-w-[90%]"
+                                                    title={ev.url}
+                                                  >
+                                                    <span className="truncate">{ev.source || ev.url}</span>
+                                                    <ExternalLink className="w-3 h-3 shrink-0 opacity-70" aria-hidden="true" />
+                                                  </a>
+                                                </div>
+                                              ) : (
+                                                <div className="text-[12px] text-[#8B8B94]">
+                                                  <span>Source: {ev.source}</span>
+                                                </div>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {msg.sources && msg.sources.length > 0 && (
+                                      <div className="mt-4">
+                                        <span className="text-[14px] text-[#D4D4D8] font-medium block mb-2">Sources</span>
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {msg.sources.map((s, si) => (
+                                            <a
+                                              key={si}
+                                              href={s.url}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-[#1C1C21] hover:bg-[#232329] text-[13px] text-[#B4B4BC] hover:text-[#F4F4F5] transition-colors max-w-full sm:max-w-[280px]"
+                                              title={`${s.title} · ${s.url}`}
+                                            >
+                                              <span className="truncate">{s.title || s.source}</span>
+                                              <ExternalLink className="w-3 h-3 shrink-0 opacity-60" aria-hidden="true" />
+                                            </a>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
                             </div>
-
-                            <div className="space-y-2">
-                              {msg.evidence.map((ev, ei) => (
-                                <div key={ei} className="bg-[#111114] rounded-[14px] px-4 py-3 text-[13px] space-y-1 [overflow-wrap:anywhere]">
-                                  <p className="text-[#D4D4D8] leading-relaxed">{ev.insight}</p>
-                                  {ev.url ? (
-                                    <div className="flex items-center gap-1 min-w-0 text-[12px] text-[#8B8B94]">
-                                      <span className="shrink-0">Source:</span>
-                                      <a
-                                        href={ev.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-[#B4B4BC] hover:text-[#F4F4F5] underline underline-offset-2 truncate flex items-center gap-1 max-w-[90%]"
-                                        title={ev.url}
-                                      >
-                                        <span className="truncate">{ev.source || ev.url}</span>
-                                        <ExternalLink className="w-3 h-3 shrink-0 opacity-70" aria-hidden="true" />
-                                      </a>
-                                    </div>
-                                  ) : (
-                                    <div className="text-[12px] text-[#8B8B94]">
-                                      <span>Source: {ev.source}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Web Citations */}
-                        {msg.sources && msg.sources.length > 0 && (
-                          <div className="mt-4">
-                            <span className="text-[14px] text-[#D4D4D8] font-medium block mb-2">Sources</span>
-                            <div className="flex flex-wrap gap-1.5">
-                              {msg.sources.map((s, si) => (
-                                <a
-                                  key={si}
-                                  href={s.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-[#1C1C21] hover:bg-[#232329] text-[13px] text-[#B4B4BC] hover:text-[#F4F4F5] transition-colors max-w-full sm:max-w-[280px]"
-                                  title={`${s.title} · ${s.url}`}
-                                >
-                                  <span className="truncate">{s.title || s.source}</span>
-                                  <ExternalLink className="w-3 h-3 shrink-0 opacity-60" aria-hidden="true" />
-                                </a>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+                          );
+                        })()}
 
                         {/* Mind map, PDF download + suggested next questions */}
                         <div className="mt-5 space-y-3">

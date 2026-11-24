@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion, type Variants } from "motion/react";
-import { CalendarDays, ChevronDown, Clapperboard, Clock, Download, Hash, LogOut, Mail, Menu, Network, Newspaper, Plus, Settings, Timer, UserRound, X } from "lucide-react";
+import { ChevronDown, Clock, Download, LayoutGrid, LogOut, Mail, Menu, Network, Plus, Settings, UserRound, X } from "lucide-react";
 import { Avatar } from "@/components/auth/Avatar";
 import { LoopyMascot } from "@/components/loopy/LoopyMascot";
 import { FIELD } from "@/components/ui/fields";
@@ -13,7 +13,6 @@ import { MiniTick } from "@/components/ui/MiniTick";
 import { createSupabaseBrowserClient } from "@/lib/auth/supabase-browser";
 import { profileOf } from "@/lib/auth/profile";
 import { useAuthUser } from "@/lib/auth/use-auth-user";
-import type { CalendarSettingsData } from "@/lib/calendar/types";
 import type { ContentTool } from "@/lib/intelligence/types";
 import { DEFAULT_PLAN_HOUR, PLAN_SEND_HOURS, hourLabel, type PlanEmailData } from "@/lib/plan-email/plan";
 import { toast } from "@/lib/toast";
@@ -43,8 +42,6 @@ interface AnalysisMenuProps {
   onOpenContent: (tool: ContentTool) => void;
   /** The analysis is finished, so the content tools can run */
   contentReady: boolean;
-  /** The country the analysis searched ("India") */
-  country?: string;
 }
 
 const noopSubscribe = () => () => {};
@@ -70,10 +67,7 @@ const NUDGE = {
   user: "group-hover:-translate-y-[2px]",
   settings: "group-hover:rotate-90 duration-500",
   logout: "group-hover:translate-x-[2px]",
-  timer: "group-hover:rotate-12 group-disabled:rotate-0",
-  videos: "group-hover:-rotate-6 group-hover:scale-110 group-disabled:rotate-0 group-disabled:scale-100",
-  news: "group-hover:-translate-y-[2px] group-disabled:translate-y-0",
-  hash: "group-hover:rotate-12 group-disabled:rotate-0",
+  tools: "group-hover:rotate-45 group-disabled:rotate-0",
 };
 
 function ItemText({ title, detail, muted }: { title: ReactNode; detail?: ReactNode; muted?: boolean }) {
@@ -89,8 +83,8 @@ function SectionLabel({ children }: { children: ReactNode }) {
   return <p className="px-3 pt-1 pb-1.5 text-[12px] font-medium text-[#71717A] truncate">{children}</p>;
 }
 
-/** The person's daily-email and calendar state, for the menu. Never throws. */
-async function loadMenuState(): Promise<{ plan: PlanEmailData; calendar: CalendarSettingsData | null }> {
+/** The person's daily-email state, for the menu. Never throws. */
+async function loadMenuState(): Promise<{ plan: PlanEmailData }> {
   const get = async <T,>(url: string): Promise<T | null> => {
     try {
       const res = await fetch(url, { cache: "no-store" });
@@ -99,13 +93,14 @@ async function loadMenuState(): Promise<{ plan: PlanEmailData; calendar: Calenda
       return null;
     }
   };
-  const [plan, calendar] = await Promise.all([get<PlanEmailData>("/api/plan-email"), get<CalendarSettingsData>("/api/calendar/settings")]);
-  return { plan: plan ?? { available: false, subscription: null }, calendar };
+  const plan = await get<PlanEmailData>("/api/plan-email");
+  return { plan: plan ?? { available: false, subscription: null } };
 }
 
 /**
- * The ☰ menu of an analysis: what you can do with this plan (PDF, daily emails, Google Calendar,
- * mind map), getting around, and your account at the bottom.
+ * The ☰ menu of an analysis: what you can do with this plan (PDF, daily emails, mind map,
+ * content tools), getting around, and your account at the bottom. Grey lines under a row only
+ * when they say something the title doesn't (a status, or why it's not ready yet).
  * Wide screens: a sidebar beside the chat, open at first; ☰ closes and reopens it (remembered).
  * Phones and small laptops: ☰ slides it over the page.
  */
@@ -120,7 +115,6 @@ export function AnalysisMenu({
   onNeedLogin,
   onOpenContent,
   contentReady,
-  country,
 }: AnalysisMenuProps) {
   const router = useRouter();
   const user = useAuthUser();
@@ -138,9 +132,8 @@ export function AnalysisMenu({
   const sidebarShown = wide && docked;
   const drawerShown = drawerOpen && !wide;
 
-  // What the server says about this person's daily emails and calendar.
+  // What the server says about this person's daily emails.
   const [plan, setPlan] = useState<PlanEmailData | null>(null);
-  const [calendar, setCalendar] = useState<CalendarSettingsData | null>(null);
   const [emailOpen, setEmailOpen] = useState(false);
   const [sendHour, setSendHour] = useState(DEFAULT_PLAN_HOUR);
   const [busy, setBusy] = useState<"start" | "stop" | null>(null);
@@ -155,7 +148,6 @@ export function AnalysisMenu({
     loadMenuState().then((s) => {
       if (!live) return;
       setPlan(s.plan);
-      setCalendar(s.calendar);
     });
     return () => {
       live = false;
@@ -169,10 +161,7 @@ export function AnalysisMenu({
     }
     setDrawerOpen(true);
     if (user)
-      void loadMenuState().then((s) => {
-        setPlan(s.plan);
-        setCalendar(s.calendar);
-      });
+      void loadMenuState().then((s) => setPlan(s.plan));
   };
 
   /** After an action that takes over the screen: the slide-over closes, the sidebar stays. */
@@ -246,30 +235,18 @@ export function AnalysisMenu({
   const emailDetail = (): ReactNode => {
     if (!user) return "Log in to get each day's step by email.";
     if (!latest) return "Once your 7-day strategy is ready.";
-    if (!plan) return "Checking…";
+    if (!plan) return undefined;
     if (!plan.available) return "Coming soon.";
     if (onThisPlan && subscription?.status === "active")
       return `Day ${subscription.sentSteps + 1} of ${subscription.totalSteps} arrives at ${hourLabel(subscription.sendHour)}.`;
     if (onThisPlan && subscription?.status === "done") return `All ${subscription.totalSteps} days sent. Start again?`;
     if (subscription?.status === "active") return `On for ${subscription.company}. Switch to this plan?`;
-    return "Today's step in your inbox each morning.";
+    // The title says what it does; a line here would only repeat it.
+    return undefined;
   };
   const emailOn = onThisPlan && subscription?.status === "active";
   const emailDisabled = Boolean(user) && (!latest || !plan?.available);
 
-  // ─── Google Calendar ───
-  // Until Google verifies the app (GOOGLE_CALENDAR_LAUNCH=on), the server reports it unavailable: "Coming soon".
-  const calendarItem = (): { title: string; detail: string; href?: string; disabled?: boolean; soon?: boolean } => {
-    if (!user) return { title: "Google Calendar", detail: "Your day's meetings in a morning email.", disabled: true, soon: true };
-    if (!calendar) return { title: "Google Calendar", detail: "Checking…", disabled: true };
-    if (!calendar.available) return { title: "Google Calendar", detail: "Your day's meetings in a morning email.", disabled: true, soon: true };
-    if (calendar.connection?.status === "reconnect")
-      return { title: "Reconnect Google Calendar", detail: "Google stopped sharing your calendar.", href: "/api/calendar/connect" };
-    if (calendar.connection)
-      return { title: "Google Calendar connected", detail: calendar.connection.googleEmail ?? "Manage it in Settings.", href: "/profile#settings-calendar" };
-    return { title: "Connect Google Calendar", detail: "Your day's meetings in a morning email.", href: "/api/calendar/connect" };
-  };
-  const cal = calendarItem();
 
   const signOut = async () => {
     closeDrawer();
@@ -311,7 +288,7 @@ export function AnalysisMenu({
                 )}
                 <ItemText
                   title={pdfIndex === s.index ? "Making your PDF…" : pdfDoneIndex === s.index ? "Downloaded" : "Download PDF"}
-                  detail={strategies.length > 1 ? `Your ${s.label}` : `Your ${s.label}, with its mind map`}
+                  detail={strategies.length > 1 ? `Your ${s.label}` : undefined}
                 />
               </button>
             </motion.div>
@@ -408,36 +385,6 @@ export function AnalysisMenu({
           </AnimatePresence>
         </motion.div>
 
-        {/* Google Calendar */}
-        <motion.div variants={ROW}>
-          {cal.href && user ? (
-            <a href={cal.href} onClick={() => setDrawerOpen(false)} className={ITEM}>
-              <CalendarDays className={`${ICON} ${calendar?.connection?.status === "active" ? "text-[#34D399] group-hover:text-[#34D399]" : ""}`} aria-hidden="true" />
-              <ItemText title={cal.title} detail={cal.detail} />
-            </a>
-          ) : (
-            <button type="button" disabled={cal.disabled} className={ITEM}>
-              <CalendarDays className={ICON} aria-hidden="true" />
-              <ItemText
-                title={
-                  cal.soon ? (
-                    <span className="flex items-center gap-2">
-                      {cal.title}
-                      <span className="shrink-0 rounded-full bg-[#1C1C21] border border-[#27272A] px-2 py-px text-[11px] font-medium text-[#B4B4BC]">
-                        Coming soon
-                      </span>
-                    </span>
-                  ) : (
-                    cal.title
-                  )
-                }
-                detail={cal.detail}
-                muted={cal.disabled}
-              />
-            </button>
-          )}
-        </motion.div>
-
         {/* Mind map */}
         <motion.div variants={ROW}>
           <button
@@ -451,38 +398,26 @@ export function AnalysisMenu({
             className={ITEM}
           >
             <Network className={`${ICON} ${NUDGE.map}`} aria-hidden="true" />
-            <ItemText title="See the mind map" detail={latest ? "Your plan at a glance." : "Once your 7-day strategy is ready."} muted={!latest} />
+            <ItemText title="See the mind map" detail={latest ? undefined : "Once your 7-day strategy is ready."} muted={!latest} />
           </button>
         </motion.div>
 
-        <div className="h-px bg-[#1C1C21] mx-3 my-3" aria-hidden="true" />
-
-        {/* ─── Content tools (SerpApi: Trends, YouTube, News, Autocomplete) ─── */}
-        <SectionLabel>Content tools</SectionLabel>
-        {(
-          [
-            { id: "time", icon: Timer, nudge: NUDGE.timer, title: "Best time to post", detail: `When people${country ? ` in ${country}` : ""} search for what you sell.` },
-            { id: "videos", icon: Clapperboard, nudge: NUDGE.videos, title: "Reference videos", detail: "Shorts and videos getting views now." },
-            { id: "news", icon: Newspaper, nudge: NUDGE.news, title: "News hooks", detail: "This month's news, turned into posts." },
-            { id: "keywords", icon: Hash, nudge: NUDGE.hash, title: "Caption keywords", detail: "What people type, for captions and hashtags." },
-          ] as const
-        ).map((t) => (
-          <motion.div key={t.id} variants={ROW}>
-            <button
-              type="button"
-              onClick={() => {
-                if (!user) return needLogin();
-                closeDrawer();
-                onOpenContent(t.id);
-              }}
-              disabled={Boolean(user) && !contentReady}
-              className={ITEM}
-            >
-              <t.icon className={`${ICON} ${t.nudge}`} aria-hidden="true" />
-              <ItemText title={t.title} detail={contentReady || !user ? t.detail : "Once your analysis is ready."} muted={Boolean(user) && !contentReady} />
-            </button>
-          </motion.div>
-        ))}
+        {/* Content tools: one row; the window has a tab for each (best time, videos, news, keywords) */}
+        <motion.div variants={ROW}>
+          <button
+            type="button"
+            onClick={() => {
+              if (!user) return needLogin();
+              closeDrawer();
+              onOpenContent("time");
+            }}
+            disabled={Boolean(user) && !contentReady}
+            className={ITEM}
+          >
+            <LayoutGrid className={`${ICON} ${NUDGE.tools}`} aria-hidden="true" />
+            <ItemText title="Content tools" detail={Boolean(user) && !contentReady ? "Once your analysis is ready." : undefined} muted={Boolean(user) && !contentReady} />
+          </button>
+        </motion.div>
 
         <div className="h-px bg-[#1C1C21] mx-3 my-3" aria-hidden="true" />
 
